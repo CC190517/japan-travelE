@@ -376,6 +376,7 @@
           <div id="cloud-actions" class="hidden space-y-2">
             <p class="text-xs text-themeWarnText">請先下載 JSON 備份，並確認 Firebase 已設定雙人 UID 權限。首次同步請由其中一人上傳，另一人下載。</p>
             <button onclick="cloudInitialUpload()" class="w-full border border-themeGreen text-themeGreen rounded-xl p-3 text-xs font-bold">首次上傳本機資料（僅限雲端為空）</button>
+            <button onclick="cloudSafeBootstrap()" class="w-full border-2 border-themeGreen bg-themeGreenLight text-themeGreen rounded-xl p-3 text-xs font-bold">第一支手機：安全合併本機資料並啟用同步</button>
             <button onclick="cloudStartDownload()" class="w-full bg-themeGreen text-white rounded-xl p-3 text-xs font-bold">下載雲端資料並啟用即時同步</button>
           </div>
           <p class="text-[11px] text-themeMuted">同一清單若兩人同時編輯，可能互相覆蓋。圖片採獨立儲存；每張約 300KB 上限，QR 請實際測試掃碼。</p>
@@ -1102,10 +1103,49 @@
       cloudStatus('首次上傳成功。接著按「下載雲端資料並啟用即時同步」。');
     }catch(e){cloudStatus('首次上傳失敗：'+e.message,true);}
   }
-  async function cloudStartDownload(){
+  // 只供資料最完整的第一支手機使用：不改動 privateContent，逐欄合併。
+  // 用 transaction 避免在合併過程中覆蓋另一裝置剛寫入的資料。
+  async function cloudSafeBootstrap(){
     if(!cloudRef)return alert('請先連接雲端');
     if(cloudReady)return cloudStatus('即時同步已啟用');
-    if(!confirm('請先匯出 JSON 備份。下載雲端資料會取代本機同類清單；雲端圖片會載入。確定繼續？'))return;
+    if(!confirm('請確認第一支手機的 JSON 與 Firebase JSON 都已備份。這會將本機清單合併到雲端（同 ID 以本機為準），保留雲端其他項目與私人行程。確定繼續？'))return;
+    try{
+      cloudStatus('正在安全合併第一支手機資料…');
+      const local=cloudSnapshot();
+      for(const key of cloudKeys){
+        const result=await cloudRef.child(key).transaction(remote=>{
+          if(key==='userEvents'){
+            const combined={...(remote||{})};
+            for(const [eventKey,notes] of Object.entries(local.userEvents||{})){
+              const previous=Array.isArray(combined[eventKey])?combined[eventKey]:[];
+              const output=previous.slice();
+              for(const note of notes){
+                const idx=output.findIndex(x=>x.name===note.name&&x.note===note.note);
+                if(idx>=0)output[idx]=note;else output.push(note);
+              }
+              combined[eventKey]=output;
+            }
+            return combined;
+          }
+          const existing=Array.isArray(remote)?remote:(remote&&typeof remote==='object'?Object.values(remote):[]);
+          const combined=existing.slice();
+          for(const item of local[key]||[]){
+            const idx=combined.findIndex(x=>String(x.id)===String(item.id));
+            if(idx>=0)combined[idx]=item;else combined.push(item);
+          }
+          return combined;
+        },undefined,false);
+        if(!result.committed)throw Error(key+' 合併未完成');
+      }
+      // 保留本機 QR 照片，後續 cloudStartImages 只補上雲端缺少的圖片。
+      cloudStatus('文字清單已合併，正在啟用同步與補傳圖片…');
+      await cloudStartDownload(true);
+    }catch(e){cloudStatus('安全合併未完成：'+e.message+'。請保留兩份備份。',true);}
+  }
+  async function cloudStartDownload(skipConfirm=false){
+    if(!cloudRef)return alert('請先連接雲端');
+    if(cloudReady)return cloudStatus('即時同步已啟用');
+    if(!skipConfirm&&!confirm('請先匯出 JSON 備份。下載雲端資料會取代本機同類清單；雲端圖片會載入。確定繼續？'))return;
     try{
       const snap=await cloudRef.once('value');
       if(!snap.exists())return cloudStatus('雲端目前是空的，請先由其中一支裝置執行首次上傳。',true);
@@ -1140,8 +1180,16 @@
     const next=cloudSnapshot();
     for(const key of cloudKeys){
       if(JSON.stringify(next[key])===JSON.stringify(cloudPrevious[key]))continue;
-      const value=next[key];cloudPrevious[key]=value;
-      cloudRef.child(key).set(value).then(()=>cloudStatus('文字資料已同步 ✓')).catch(e=>cloudStatus('雲端寫入失敗（本機已儲存）：'+e.message,true));
+      const value=next[key];
+      const expected=JSON.stringify(cloudPrevious[key]);
+      cloudRef.child(key).transaction(remote=>{
+        const normalized=remote===null?(key==='userEvents'?{}:[]):(key==='userEvents'?remote:(Array.isArray(remote)?remote:Object.values(remote)));
+        if(JSON.stringify(cloudClean(key,normalized))!==expected)return;
+        return value;
+      },undefined,false).then(result=>{
+        if(result.committed){cloudPrevious[key]=value;cloudStatus('文字資料已同步 ✓');}
+        else cloudStatus('偵測到另一支手機同時修改 '+key+'，已停止覆蓋。請先匯出 JSON 備份，再重新整理確認。',true);
+      }).catch(e=>cloudStatus('雲端寫入失敗（本機已儲存）：'+e.message,true));
     }
   };
 
