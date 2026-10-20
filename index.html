@@ -1,0 +1,1349 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>2026日本遊</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            themeBg: '#fcfbfa',
+            themeCard: '#ffffff',
+            themeHeader: '#f9f6f0',
+            themeGreen: '#435340',
+            themeGreenHover: '#334130',
+            themeGreenLight: '#eef2ed',
+            themeText: '#2d312e',
+            themeMuted: '#818880',
+            themeBorder: '#ece8e1',
+            themeWarnBg: '#fdf6ea',
+            themeWarnText: '#b46d12'
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body {
+      background-color: #f7f5f0;
+      color: #2d312e;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    
+    .nav-tab.active {
+      background-color: #435340;
+      color: #ffffff;
+    }
+    .day-tab.active {
+      background-color: #435340;
+      color: #ffffff;
+    }
+    .day-tab.active span {
+      color: #ffffff;
+    }
+  </style>
+</head>
+<body class="min-h-screen pb-12">
+
+  <div class="max-w-md mx-auto bg-themeBg min-h-screen shadow-lg border-x border-themeBorder">
+
+    <!-- 頂部 Header -->
+    <header class="bg-themeHeader p-4 border-b border-themeBorder sticky top-0 z-50">
+      <div class="flex justify-between items-center mb-3">
+        <div>
+          <span class="text-[10px] tracking-wider uppercase bg-white/80 px-2 py-0.5 rounded-full text-themeMuted border border-themeBorder font-semibold">2026 JAPAN TRIP</span>
+          <h1 class="text-lg font-bold text-themeText mt-0.5">2026日本遊</h1>
+        </div>
+        <div id="save-status-badge" class="text-xs px-2.5 py-1 rounded-full bg-white text-themeMuted border border-themeBorder flex items-center gap-1">
+          <i class="fa-cellphone fa-solid text-themeGreen"></i> 本機儲存
+        </div>
+      </div>
+
+      <!-- 頁面切換選單 -->
+      <nav class="grid grid-cols-6 gap-1 text-[11px] font-semibold">
+        <button onclick="switchTab('itinerary')" id="tab-btn-itinerary" class="nav-tab active py-2 rounded-xl border border-transparent transition flex flex-col items-center justify-center gap-0.5">
+          <i class="fa-solid fa-map-location-dot"></i> 行程
+        </button>
+        <button onclick="switchTab('accounting')" id="tab-btn-accounting" class="nav-tab text-themeMuted hover:bg-white/50 py-2 rounded-xl border border-transparent transition flex flex-col items-center justify-center gap-0.5">
+          <i class="fa-solid fa-wallet"></i> 記帳
+        </button>
+        <button onclick="switchTab('packing')" id="tab-btn-packing" class="nav-tab text-themeMuted hover:bg-white/50 py-2 rounded-xl border border-transparent transition flex flex-col items-center justify-center gap-0.5">
+          <i class="fa-solid fa-suitcase"></i> 行李
+        </button>
+        <button onclick="switchTab('shopping')" id="tab-btn-shopping" class="nav-tab text-themeMuted hover:bg-white/50 py-2 rounded-xl border border-transparent transition flex flex-col items-center justify-center gap-0.5">
+          <i class="fa-solid fa-bag-shopping"></i> 購物
+        </button>
+        <button onclick="switchTab('qr')" id="tab-btn-qr" class="nav-tab text-themeMuted hover:bg-white/50 py-2 rounded-xl border border-transparent transition flex flex-col items-center justify-center gap-0.5">
+          <i class="fa-solid fa-qrcode"></i> QR區
+        </button>
+        <button onclick="switchTab('info')" id="tab-btn-info" class="nav-tab text-themeMuted hover:bg-white/50 py-2 rounded-xl border border-transparent transition flex flex-col items-center justify-center gap-0.5">
+          <i class="fa-solid fa-circle-info"></i> 資訊
+        </button>
+      </nav>
+    </header>
+
+    <!-- 主要內容區 -->
+    <main class="p-4 space-y-4">
+
+      <!-- ================= 1. 行程分頁 (ITINERARY) ================= -->
+      <section id="tab-itinerary" class="tab-content space-y-4">
+        
+        <div class="bg-white rounded-2xl p-3 border border-themeBorder space-y-2">
+          <div class="flex gap-2"><input id="trip-search-input" oninput="searchTrip()" placeholder="搜尋八天行程、餐廳與備註…" class="flex-1 min-w-0 border border-themeBorder rounded-xl p-2.5 text-xs"><button onclick="jumpToday()" class="bg-themeGreen text-white rounded-xl px-3 text-xs font-bold">今日行程</button></div>
+          <div id="trip-search-results" class="space-y-1 text-xs"></div>
+        </div>
+        <!-- 天數切換按鈕 -->
+        <div class="flex gap-2 overflow-x-auto no-scrollbar py-1">
+          <button onclick="switchDay(1)" id="day-btn-1" class="day-tab active flex-shrink-0 px-3.5 py-2 rounded-xl text-center border border-themeBorder bg-white transition">
+            <div class="text-[10px] uppercase font-bold text-themeMuted">Day 1</div>
+            <div class="text-xs font-extrabold">10/23</div>
+          </button>
+          <button onclick="switchDay(2)" id="day-btn-2" class="day-tab flex-shrink-0 px-3.5 py-2 rounded-xl text-center border border-themeBorder bg-white transition">
+            <div class="text-[10px] uppercase font-bold text-themeMuted">Day 2</div>
+            <div class="text-xs font-extrabold">10/24</div>
+          </button>
+          <button onclick="switchDay(3)" id="day-btn-3" class="day-tab flex-shrink-0 px-3.5 py-2 rounded-xl text-center border border-themeBorder bg-white transition">
+            <div class="text-[10px] uppercase font-bold text-themeMuted">Day 3</div>
+            <div class="text-xs font-extrabold">10/25</div>
+          </button>
+          <button onclick="switchDay(4)" id="day-btn-4" class="day-tab flex-shrink-0 px-3.5 py-2 rounded-xl text-center border border-themeBorder bg-white transition">
+            <div class="text-[10px] uppercase font-bold text-themeMuted">Day 4</div>
+            <div class="text-xs font-extrabold">10/26</div>
+          </button>
+          <button onclick="switchDay(5)" id="day-btn-5" class="day-tab flex-shrink-0 px-3.5 py-2 rounded-xl text-center border border-themeBorder bg-white transition">
+            <div class="text-[10px] uppercase font-bold text-themeMuted">Day 5</div>
+            <div class="text-xs font-extrabold">10/27</div>
+          </button>
+          <button onclick="switchDay(6)" id="day-btn-6" class="day-tab flex-shrink-0 px-3.5 py-2 rounded-xl text-center border border-themeBorder bg-white transition">
+            <div class="text-[10px] uppercase font-bold text-themeMuted">Day 6</div>
+            <div class="text-xs font-extrabold">10/28</div>
+          </button>
+          <button onclick="switchDay(7)" id="day-btn-7" class="day-tab flex-shrink-0 px-3.5 py-2 rounded-xl text-center border border-themeBorder bg-white transition">
+            <div class="text-[10px] uppercase font-bold text-themeMuted">Day 7</div>
+            <div class="text-xs font-extrabold">10/29</div>
+          </button>
+          <button onclick="switchDay(8)" id="day-btn-8" class="day-tab flex-shrink-0 px-3.5 py-2 rounded-xl text-center border border-themeBorder bg-white transition">
+            <div class="text-[10px] uppercase font-bold text-themeMuted">Day 8</div>
+            <div class="text-xs font-extrabold">10/30</div>
+          </button>
+        </div>
+
+        <div id="day-title-card" class="bg-white rounded-2xl p-4 border border-themeBorder flex justify-between items-start">
+          <div>
+            <span id="day-subtitle" class="text-xs font-bold text-themeMuted">D1 | 10/23 (五)</span>
+            <h2 id="day-main-title" class="text-lg font-extrabold text-themeText mt-0.5">成田・淺草・晴空塔</h2>
+          </div>
+          <span class="text-xs px-2.5 py-1 rounded-full bg-themeWarnBg text-themeWarnText font-bold border border-amber-200">
+            <i class="fa-solid fa-triangle-exclamation"></i> 不搭公車
+          </span>
+        </div>
+
+        <div id="day-events-container" class="space-y-4"></div>
+
+      </section>
+
+
+      <!-- ================= 2. 記帳本分頁 (ACCOUNTING) ================= -->
+      <section id="tab-accounting" class="tab-content hidden space-y-4">
+        <div class="bg-[#524641] text-white rounded-2xl p-5 shadow-md space-y-4">
+          <div class="flex justify-between items-start">
+            <div>
+              <p class="text-xs text-stone-300 font-medium">本次旅行總支出 (日幣)</p>
+              <h2 id="total-jpy" class="text-3xl font-extrabold mt-1">¥ 0</h2>
+            </div>
+            <div class="text-right">
+              <p class="text-xs text-stone-300 font-medium">折合台幣總計</p>
+              <h3 id="total-twd" class="text-2xl font-extrabold mt-1 text-amber-200">$ 0</h3>
+            </div>
+          </div>
+          <div class="border-t border-stone-600/60 pt-3 flex justify-between text-xs text-stone-300">
+            <span>筆數：<strong id="acc-count" class="text-white">0 筆</strong></span>
+            <span>平均每日：<strong id="acc-avg-jpy" class="text-white">¥ 0</strong></span>
+          </div>
+        </div>
+
+        <div class="bg-white rounded-2xl p-4 border border-themeBorder space-y-3">
+          <h3 class="text-sm font-extrabold text-themeText flex items-center gap-1.5">
+            <i class="fa-regular fa-pen-to-square text-themeGreen"></i> 快速記帳 (含日幣與台幣金額)
+          </h3>
+          <form onsubmit="handleAddAccounting(event)" class="space-y-2.5 text-xs">
+            <div class="grid grid-cols-2 gap-2">
+              <input type="text" id="acc-title" placeholder="項目名稱 (例如: 築地壽司)" required class="border border-themeBorder rounded-xl p-2.5 focus:outline-none focus:border-themeGreen">
+              <select id="acc-cat" class="border border-themeBorder rounded-xl p-2.5 bg-white focus:outline-none focus:border-themeGreen">
+                <option value="🍽️ 美食餐飲">🍽️ 美食餐飲</option>
+                <option value="🚃 交通運輸">🚃 交通運輸</option>
+                <option value="🏨 飯店住宿">🏨 飯店住宿</option>
+                <option value="🎟️ 門票票券">🎟️ 門票票券</option>
+                <option value="🛍️ 購物採買">🛍️ 購物採買</option>
+                <option value="💡 其他支出">💡 其他支出</option>
+              </select>
+            </div>
+            <div class="grid grid-cols-2 gap-2">
+              <input type="number" id="acc-jpy" oninput="autoCalcTwd(this.value)" placeholder="金額 (JPY 日幣)" required class="border border-themeBorder rounded-xl p-2.5 focus:outline-none focus:border-themeGreen">
+              <input type="number" id="acc-twd" placeholder="換算台幣 (TWD，選填)" class="border border-themeBorder rounded-xl p-2.5 focus:outline-none focus:border-themeGreen">
+            </div>
+            <div class="grid grid-cols-2 gap-2">
+              <label class="border border-themeBorder rounded-xl p-2.5 bg-themeHeader text-themeMuted text-center cursor-pointer font-medium flex items-center justify-center gap-1">
+                <i class="fa-solid fa-camera"></i> <span id="acc-img-label">選擇照片/收據</span>
+                <input type="file" accept="image/*" onchange="handleImageUpload(event, 'acc-img-data', 'acc-img-label')" class="hidden">
+              </label>
+              <input type="text" id="acc-note" placeholder="記帳備註 (現金/刷卡)" class="border border-themeBorder rounded-xl p-2.5 focus:outline-none focus:border-themeGreen">
+            </div>
+            <button type="submit" class="w-full bg-themeGreen hover:bg-themeGreenHover text-white font-extrabold py-3 rounded-xl shadow-sm transition mt-1">
+              新增記帳紀錄
+            </button>
+          </form>
+        </div>
+
+        <div class="bg-white rounded-2xl p-4 border border-themeBorder space-y-3">
+          <h3 class="text-sm font-extrabold text-themeText">消費明細列表</h3>
+          <div id="accounting-items-list" class="space-y-2 text-xs"></div>
+        </div>
+      </section>
+
+
+      <!-- ================= 3. 行李清單分頁 (PACKING) ================= -->
+      <section id="tab-packing" class="tab-content hidden space-y-4">
+        <div class="bg-white rounded-2xl p-4 border border-themeBorder space-y-3">
+          <h2 class="text-sm font-extrabold text-themeText flex items-center gap-1.5">
+            <i class="fa-solid fa-suitcase text-themeGreen"></i> 行李檢查清單
+          </h2>
+          <form onsubmit="handleAddPacking(event)" class="flex gap-2">
+            <input type="text" id="packing-input" placeholder="新增準備物品..." required class="flex-1 border border-themeBorder text-xs p-2.5 rounded-xl focus:outline-none focus:border-themeGreen">
+            <button type="submit" class="bg-themeGreen text-white text-xs px-4 py-2.5 rounded-xl font-bold">新增</button>
+          </form>
+          <div id="packing-items-list" class="space-y-2 text-xs pt-1"></div>
+        </div>
+      </section>
+
+
+      <!-- ================= 4. 購物清單分頁 (SHOPPING) ================= -->
+      <section id="tab-shopping" class="tab-content hidden space-y-4">
+        <div class="bg-white rounded-2xl p-4 border border-themeBorder space-y-1">
+          <h2 class="text-base font-extrabold text-themeText flex items-center gap-2">
+            <i class="fa-solid fa-bag-shopping text-themeGreen"></i> 日本購物與代買清單
+          </h2>
+          <p class="text-xs text-themeMuted">記錄想買的藥妝、伴手禮、T1 周邊，支援分類、圖片與連結。</p>
+        </div>
+
+        <div class="bg-white rounded-2xl p-4 border border-themeBorder space-y-3">
+          <h3 class="text-xs font-extrabold text-themeText flex items-center gap-1">
+            <i class="fa-solid fa-circle-plus text-themeGreen"></i> 新增購物商品
+          </h3>
+          <form onsubmit="handleAddShopping(event)" class="space-y-2.5 text-xs">
+            <input type="text" id="shop-title" placeholder="商品名稱 (例如: T1 聯名外套)" required class="w-full border border-themeBorder rounded-xl p-2.5 focus:outline-none focus:border-themeGreen">
+            <div class="grid grid-cols-2 gap-2">
+              <select id="shop-cat" class="border border-themeBorder rounded-xl p-2.5 bg-white focus:outline-none focus:border-themeGreen">
+                <option value="👕 服飾配件">👕 服飾配件</option>
+                <option value="💄 藥妝美妝">💄 藥妝美妝</option>
+                <option value="🍪 零食伴手禮">🍪 零食伴手禮</option>
+                <option value="🎮 動漫周邊">🎮 動漫周邊</option>
+                <option value="📦 其他商品">📦 其他商品</option>
+              </select>
+              <label class="border border-themeBorder rounded-xl p-2.5 bg-themeHeader text-themeMuted text-center cursor-pointer font-medium flex items-center justify-center gap-1">
+                <i class="fa-solid fa-image"></i> <span id="shop-img-label">選擇商品照片</span>
+                <input type="file" accept="image/*" onchange="handleImageUpload(event, 'shop-img-data', 'shop-img-label')" class="hidden">
+              </label>
+            </div>
+            <div class="grid grid-cols-2 gap-2"><input id="shop-price" type="number" min="0" step="1" placeholder="日幣單價 ¥" class="border border-themeBorder rounded-xl p-2.5"><input id="shop-qty" type="number" min="1" step="1" value="1" placeholder="數量" class="border border-themeBorder rounded-xl p-2.5"></div>
+            <div class="grid grid-cols-2 gap-2">
+              <input type="url" id="shop-url" placeholder="商品連結 (URL)" class="border border-themeBorder rounded-xl p-2.5 focus:outline-none focus:border-themeGreen">
+              <input type="text" id="shop-note" placeholder="備註 (尺寸/顏色/地點)" class="border border-themeBorder rounded-xl p-2.5 focus:outline-none focus:border-themeGreen">
+            </div>
+            <button type="submit" class="w-full bg-themeGreen hover:bg-themeGreenHover text-white font-extrabold py-3 rounded-xl shadow-sm transition">
+              加入購物清單
+            </button>
+          </form>
+        </div>
+
+        <div id="shopping-budget" class="text-xs text-themeGreen font-bold bg-themeGreenLight rounded-xl p-3"></div>
+        <div id="shopping-items-list" class="space-y-3"></div>
+      </section>
+
+
+      <!-- ================= 5. 專屬 QR 區分頁 (QR) ================= -->
+      <section id="tab-qr" class="tab-content hidden space-y-4">
+        <div class="bg-white rounded-2xl p-4 border border-themeBorder space-y-1">
+          <h2 class="text-base font-extrabold text-themeText flex items-center gap-2">
+            <i class="fa-solid fa-qrcode text-themeGreen"></i> 票券 / 機票 / QR Code 專區
+          </h2>
+          <p class="text-xs text-themeMuted">集中存放吉卜力門票、新幹線票、機票等 QR 截圖，點擊圖片可直接放大檢視。</p>
+        </div>
+
+        <div class="bg-white rounded-2xl p-4 border border-themeBorder space-y-3">
+          <h3 class="text-xs font-extrabold text-themeText flex items-center gap-1">
+            <i class="fa-solid fa-circle-plus text-themeGreen"></i> 新增 QR 票券項目
+          </h3>
+          <form onsubmit="handleAddQr(event)" class="space-y-2.5 text-xs">
+            <input type="text" id="qr-title" placeholder="票券名稱 (例如: 吉卜力公園入場 QR)" required class="w-full border border-themeBorder rounded-xl p-2.5 focus:outline-none focus:border-themeGreen">
+            <div class="grid grid-cols-2 gap-2">
+              <input type="text" id="qr-note" placeholder="備註 (例如: 10/28 10:00入場)" class="border border-themeBorder rounded-xl p-2.5 focus:outline-none focus:border-themeGreen">
+              <label class="border border-themeBorder rounded-xl p-2.5 bg-themeHeader text-themeMuted text-center cursor-pointer font-medium flex items-center justify-center gap-1">
+                <i class="fa-solid fa-qrcode"></i> <span id="qr-img-label">選擇 QR 圖片</span>
+                <input type="file" accept="image/*" onchange="handleImageUpload(event, 'qr-img-data', 'qr-img-label')" class="hidden" required>
+              </label>
+            </div>
+            <button type="submit" class="w-full bg-themeGreen hover:bg-themeGreenHover text-white font-extrabold py-3 rounded-xl shadow-sm transition">
+              儲存票券 QR
+            </button>
+          </form>
+        </div>
+
+        <div id="qr-items-list" class="space-y-3"></div>
+      </section>
+
+
+      <!-- ================= 6. 重要資訊與地鐵顏色分頁 (INFO) ================= -->
+      <section id="tab-info" class="tab-content hidden space-y-4 text-xs text-themeText">
+        
+        <!-- 固定預約與航班資訊卡片 (移至此處) -->
+        <div class="bg-white rounded-2xl p-4 border border-themeBorder space-y-2.5 text-xs text-themeText">
+          <h3 class="font-extrabold text-sm text-themeText flex items-center gap-2 border-b border-themeBorder pb-2">
+            <i class="fa-solid fa-circle-info text-themeGreen"></i> 固定預約與航班資訊
+          </h3>
+          <div class="space-y-1.5 leading-relaxed">
+            <p><i class="fa-solid fa-plane-departure text-blue-600"></i> <strong>去程：</strong>10/23 高雄 08:05 → 成田 T2 12:40</p>
+            <p><i class="fa-solid fa-plane-arrival text-blue-600"></i> <strong>回程：</strong>10/30 關西 T1 14:10 → 高雄 16:30 (亞航 AK171)</p>
+            <p><i class="fa-solid fa-car text-amber-700"></i> <strong>Toyota 租車：</strong>10/25 09:00 新宿三丁目取車 → 10/26 20:00 名古屋還車</p>
+            <p><i class="fa-solid fa-ticket text-rose-600"></i> <strong>吉卜力公園：</strong>10/28 (三) 10:00 入場 (帶護照與 QR)</p>
+          </div>
+        </div>
+
+        <!-- 住宿飯店一覽卡片 (移至此處) -->
+        <div class="bg-white rounded-2xl p-4 border border-themeBorder space-y-2.5 text-xs text-themeText">
+          <h3 class="font-extrabold text-sm text-themeText flex items-center gap-2 border-b border-themeBorder pb-2">
+            <i class="fa-solid fa-hotel text-themeGreen"></i> 住宿飯店一覽
+          </h3>
+          <div class="space-y-1.5 leading-relaxed">
+            <p><i class="fa-solid fa-building text-indigo-600"></i> <strong>10/23：</strong>SORA 雷門 (東京淺草)</p>
+            <p><i class="fa-solid fa-building text-indigo-600"></i> <strong>10/24：</strong>Hotel QUEEN ANNEX (東京新宿)</p>
+            <p><i class="fa-solid fa-hot-tub-person text-indigo-600"></i> <strong>10/25：</strong>伊豆高原宿 Syuhari 守破離</p>
+            <p><i class="fa-solid fa-building text-indigo-600"></i> <strong>10/26-28：</strong>三井花園飯店名古屋普米爾 (連續兩筆訂單，10/29退房)</p>
+            <p><i class="fa-solid fa-building text-indigo-600"></i> <strong>10/29：</strong>IAM HOTEL (大阪難波)</p>
+          </div>
+        </div>
+
+        <div class="bg-white rounded-2xl p-4 border border-themeBorder space-y-3">
+          <h2 class="text-sm font-extrabold border-b border-themeBorder pb-2 flex items-center gap-1.5">
+            <i class="fa-solid fa-circle-info text-themeGreen"></i> 車站辨識 4 件要事 & 提醒
+          </h2>
+          
+          <div class="bg-themeWarnBg border border-amber-200 rounded-xl p-3 text-themeWarnText space-y-1">
+            <p class="font-bold text-xs"><i class="fa-solid fa-triangle-exclamation"></i> 重要備忘</p>
+            <ul class="list-disc list-inside space-y-1 leading-relaxed">
+              <li>10/25 (週日) 伊豆自驾注意假期塞車。</li>
+              <li>10/26 (一) 長途駕車務必預留緩衝時間，<strong>20:00 前</strong> 完成還車。</li>
+              <li>10/28 (三) 晚上於飯店交寄行李，不保證 10/29 能抵達大阪，需向飯店與物流確認截件時間。</li>
+              <li>10/30 (五) 更改為亞航 AK171 (14:10 起飛)，請提前至關西機場 T1 辦理。</li>
+            </ul>
+          </div>
+
+          <div class="space-y-2">
+            <h3 class="font-bold text-xs text-themeText">車站辨識 4 件要事：</h3>
+            <ol class="list-decimal list-inside bg-themeHeader p-3 rounded-xl border border-themeBorder space-y-1">
+              <li>路線名稱 (例如：日比谷線)</li>
+              <li>路線代號與官方顏色 (例如：H 銀灰色)</li>
+              <li>列車方向 / 終點站</li>
+              <li>是否停靠你要下車的站 (普通、急行有差)</li>
+            </ol>
+          </div>
+        </div>
+
+        <div class="bg-white rounded-2xl p-4 border border-themeBorder space-y-3">
+          <h3 class="text-sm font-extrabold text-themeText border-b border-themeBorder pb-2 flex items-center gap-1.5">
+            <i class="fa-solid fa-palette text-themeGreen"></i> 主要路線顏色與代號對照
+          </h3>
+          <div class="grid grid-cols-1 gap-2">
+            <div class="p-2.5 bg-themeHeader rounded-xl border border-themeBorder flex items-center justify-between">
+              <span class="font-bold">A 都營淺草線</span>
+              <span class="px-2 py-0.5 rounded bg-rose-500 text-white font-bold text-[10px]">玫紅色 (Asakusa)</span>
+            </div>
+            <div class="p-2.5 bg-themeHeader rounded-xl border border-themeBorder flex items-center justify-between">
+              <span class="font-bold">H 東京地下鐵日比谷線</span>
+              <span class="px-2 py-0.5 rounded bg-gray-400 text-white font-bold text-[10px]">銀灰色 (Hibiya)</span>
+            </div>
+            <div class="p-2.5 bg-themeHeader rounded-xl border border-themeBorder flex items-center justify-between">
+              <span class="font-bold">C 東京地下鐵千代田線</span>
+              <span class="px-2 py-0.5 rounded bg-emerald-600 text-white font-bold text-[10px]">綠色 (Chiyoda)</span>
+            </div>
+            <div class="p-2.5 bg-themeHeader rounded-xl border border-themeBorder flex items-center justify-between">
+              <span class="font-bold">OH 小田急線</span>
+              <span class="px-2 py-0.5 rounded bg-blue-500 text-white font-bold text-[10px]">藍色 (Odakyu)</span>
+            </div>
+            <div class="p-2.5 bg-themeHeader rounded-xl border border-themeBorder flex items-center justify-between">
+              <span class="font-bold">H 名古屋市營地鐵東山線</span>
+              <span class="px-2 py-0.5 rounded bg-amber-400 text-gray-900 font-bold text-[10px]">黃色 (Higashiyama ※與東京H不同系統)</span>
+            </div>
+            <div class="p-2.5 bg-themeHeader rounded-xl border border-themeBorder flex items-center justify-between">
+              <span class="font-bold">Linimo 磁浮列車</span>
+              <span class="px-2 py-0.5 rounded bg-cyan-600 text-white font-bold text-[10px]">藍色系 (東部丘陵線前往愛・地球博)</span>
+            </div>
+          </div>
+        </div>
+        <div class="bg-white rounded-2xl p-4 border border-themeBorder space-y-3">
+          <h3 class="text-sm font-extrabold text-themeGreen"><i class="fa-solid fa-floppy-disk"></i> JSON 備份與還原（含 QR 區）</h3>
+          <p class="text-xs text-themeMuted">備份包含行程備註、照片、記帳、行李、購物及票券 QR 圖片。只儲存在目前裝置，不會自動同步。</p>
+          <p id="backup-last-time" class="text-xs text-themeMuted">尚未備份</p>
+          <button onclick="exportTripJSON()" class="w-full bg-themeGreen text-white font-bold text-xs py-3 rounded-xl">匯出 JSON 備份</button>
+          <label class="block text-center bg-themeHeader border border-themeBorder rounded-xl p-3 text-xs font-bold cursor-pointer">匯入 JSON 還原<input type="file" accept=".json,application/json" onchange="importTripJSON(event)" class="hidden"></label>
+          <button onclick="restorePreImport()" class="w-full bg-white border border-themeBorder rounded-xl p-2.5 text-xs font-bold">回復上次匯入前資料</button>
+          <p class="text-xs text-themeWarnText">匯入會取代目前資料。請先確認已下載備份檔。QR 圖片可能含個人票券資訊，請妥善保管 JSON。</p>
+        </div>
+
+        <div id="cloud-panel" class="bg-white rounded-2xl p-4 border border-themeBorder space-y-3">
+          <h3 class="text-sm font-extrabold text-themeGreen"><i class="fa-solid fa-cloud"></i> 雙人雲端同步</h3>
+          <p class="text-xs text-themeMuted">免 Gmail 登入。只有 Firebase 規則核准的兩支裝置才能讀寫。行程備註、記帳、行李與購物的文字資料可同步；可同步少量 QR 圖片與行程、記帳、購物照片（每張上限約 300KB）；請仍定期匯出 JSON 備份。</p>
+          <p id="cloud-status" class="text-xs font-bold text-themeWarnText">尚未連接 Firebase；原本本機資料不受影響。</p>
+          <button onclick="cloudConnect()" class="w-full bg-themeGreen text-white rounded-xl p-3 text-xs font-bold">連接雲端／取得匿名 UID</button>
+          <div class="bg-themeHeader rounded-xl p-3 space-y-2">
+            <p class="text-xs font-bold">本裝置 UID（提供給管理者設定雙人權限）</p>
+            <p id="cloud-uid" class="text-xs break-all select-all">尚未取得</p>
+            <button onclick="cloudCopyUid()" class="text-xs font-bold text-themeGreen underline">複製 UID</button>
+          </div>
+          <div id="cloud-actions" class="hidden space-y-2">
+            <p class="text-xs text-themeWarnText">請先下載 JSON 備份，並確認 Firebase 已設定雙人 UID 權限。首次同步請由其中一人上傳，另一人下載。</p>
+            <button onclick="cloudInitialUpload()" class="w-full border border-themeGreen text-themeGreen rounded-xl p-3 text-xs font-bold">首次上傳本機資料（僅限雲端為空）</button>
+            <button onclick="cloudStartDownload()" class="w-full bg-themeGreen text-white rounded-xl p-3 text-xs font-bold">下載雲端資料並啟用即時同步</button>
+          </div>
+          <p class="text-[11px] text-themeMuted">同一清單若兩人同時編輯，可能互相覆蓋。圖片採獨立儲存；每張約 300KB 上限，QR 請實際測試掃碼。</p>
+        </div>
+      </section>
+
+    </main>
+
+  </div>
+
+  <!-- 燈箱 Modal (點擊圖片直接放大) -->
+  <div id="image-modal" onclick="closeImageModal()" class="fixed inset-0 bg-black/80 z-[100] flex items-center justify-center p-4 hidden">
+    <div class="relative max-w-full max-h-full">
+      <button onclick="closeImageModal()" class="absolute -top-10 right-0 text-white text-xl font-bold p-2"><i class="fa-solid fa-xmark"></i></button>
+      <img id="modal-img-element" src="" class="max-w-full max-h-[85vh] rounded-xl object-contain">
+    </div>
+  </div>
+
+  <!-- JavaScript 邏輯 -->
+  <script>
+    let tempUploadImages = {};
+
+    const pdfData = {
+      1: {
+        subtitle: "D1 | 10/23 (五)",
+        title: "成田・淺草・晴空塔",
+        events: [
+          { time: "08:05 - 12:40", type: "航班", title: "高雄起飛 → 成田第 2 航廈抵達", desc: "固定航班：08:05 高雄起飛，12:40 抵達成田第 2 航廈。", map: "https://maps.google.com/?q=成田國際機場第二航廈" },
+          { time: "12:40 - 14:10", type: "手續", title: "入境、領行李、前往京成電鐵車站", desc: "視通關時間調整；提領行李後前往「空港第 2 / Narita Airport Terminal 2·3」京成電鐵站。", map: "https://maps.google.com/?q=Narita+Airport+Terminal+2" },
+          { time: "14:10 - 15:40", type: "交通", title: "京成／都營淺草線方向搭車到淺草", desc: "優先找京成成田 Sky Access 線 Access 特急，車頭／看板確認「淺草 Asakusa」為停靠站；部分班次直通都營淺草線 (代號 A 玫紅色，淺草站 A18)。", map: "https://maps.google.com/?q=SORA+雷門" },
+          { time: "15:40 - 16:15", type: "住宿", title: "步行至 SORA 雷門、辦理入住／放行李", desc: "出站依飯店地址導航，出口有電梯需求時依現場指標。", map: "https://maps.google.com/?q=SORA+雷門" },
+          { time: "16:15 - 17:30", type: "景點", title: "雷門 → 仲見世通 → 淺草寺", desc: "參訪淺草經典文化，雷門、仲見世通商店街散策與淺草寺參拜。", map: "https://maps.google.com/?q=淺草寺" },
+          { time: "17:30 - 18:10", type: "交通", title: "步行或搭東武線往晴空塔", desc: "從淺草可步行約 20-30 分鐘，或至東武淺草站搭東武晴空塔線到「東京晴空塔站」。", map: "https://maps.google.com/?q=東京晴空塔" },
+          { time: "18:10 - 19:45", type: "景點", title: "晴空塔周邊、晚餐", desc: "晴空塔商場購物與享用晚餐；若要上展望台另預留排隊時間。", map: "https://maps.google.com/?q=東京晴空塔" },
+          { time: "19:45 - 20:30", type: "休息", title: "返回 SORA 雷門、休息", desc: "返回飯店休息。若抵達較晚，優先保留淺草寺，晴空塔可縮短。", map: "https://maps.google.com/?q=SORA+雷門" }
+        ]
+      },
+      2: {
+        subtitle: "D2 | 10/24 (六)",
+        title: "築地・小網神社・豪德寺・新宿",
+        events: [
+          { time: "07:15 - 07:45", type: "住宿", title: "退房、帶行李前往淺草站", desc: "SORA 雷門退房，攜帶行李前往淺草站；本日不預先寄放行李。", map: "https://maps.google.com/?q=SORA+雷門" },
+          { time: "07:45 - 08:20", type: "交通", title: "都營淺草線至東銀座，步行到築地場外市場", desc: "淺草站 A18 搭都營淺草線 A (玫紅色)，往西馬込方向至東銀座 A11 步行至市場。", map: "https://maps.google.com/?q=築地場外市場" },
+          { time: "08:20 - 09:40", type: "美食", title: "築地早餐與逛街", desc: "享用築地海鮮早餐、玉子燒與傳統市場散策。", map: "https://maps.google.com/?q=築地場外市場" },
+          { time: "09:40 - 10:10", type: "交通", title: "築地 H11 → 人形町 H14，步行小網神社", desc: "築地站 H11 搭東京 Metro 日比谷線 H (銀灰色) 往北千住方向至人形町 H14 (A2出口) 步行至小網神社。", map: "https://maps.google.com/?q=小網神社" },
+          { time: "10:10 - 11:10", type: "景點", title: "小網神社參拜", desc: "強運厄除神社參拜；週六排隊較長可延至 11:40。", map: "https://maps.google.com/?q=小網神社" },
+          { time: "11:10 - 12:30", type: "交通", title: "前往豪德寺", desc: "人形町 H14 搭日比谷線 H 至日比谷 H08 → 轉千代田線 C09 往代代木上原 C01 → 轉小田急線 OH (藍色) 至豪德寺 OH10。", map: "https://maps.google.com/?q=豪德寺" },
+          { time: "12:30 - 14:00", type: "景點", title: "豪德寺參觀、附近簡單午餐", desc: "滿山招福貓寺院參觀與附近午餐。", map: "https://maps.google.com/?q=豪德寺" },
+          { time: "14:00 - 15:00", type: "交通", title: "豪德寺站 → 新宿站，步行到 Hotel QUEEN ANNEX", desc: "豪德寺 OH10 搭小田急線往新宿 OH01，步行至飯店。", map: "https://maps.google.com/?q=Hotel+QUEEN+ANNEX" },
+          { time: "15:00 - 18:30", type: "景點", title: "入住／放行李，逛新宿三丁目與晚餐", desc: "飯店辦理入住，逛新宿三丁目與享用晚餐。", map: "https://maps.google.com/?q=Hotel+QUEEN+ANNEX" },
+          { time: "晚上", type: "備忘", title: "整理駕照、日文譯本、護照與 Toyota 預約資料", desc: "確認明日自駕所需文件。", map: "https://maps.google.com/?q=Hotel+QUEEN+ANNEX" }
+        ]
+      },
+      3: {
+        subtitle: "D3 | 10/25 (日)",
+        title: "新宿自駕到伊豆",
+        events: [
+          { time: "08:10 - 08:40", type: "住宿", title: "Hotel QUEEN ANNEX 退房、步行至 Toyota", desc: "飯店退房，步行至 Toyota Rent a Car 新宿三丁目站前店。", map: "https://maps.google.com/?q=Toyota+Rent+a+Car+新宿三丁目站前店" },
+          { time: "09:00 - 09:40", type: "自駕", title: "Toyota 取車、驗車與導航設定", desc: "09:00 預約取車，出示護照、台灣駕照正本、日文譯本與預約資料。車款 SUV2。", map: "https://maps.google.com/?q=Toyota+Rent+a+Car+新宿三丁目站前店" },
+          { time: "09:40 - 13:00", type: "自駕", title: "開車往大室山", desc: "依當天路況選擇首都高、東名／小田原厚木道路。週日注意塞車。", map: "https://maps.google.com/?q=大室山" },
+          { time: "13:00 - 14:10", type: "景點", title: "大室山吊椅與山頂步道", desc: "搭乘登山吊椅至火山口，漫步山頂步道 (視天候)。", map: "https://maps.google.com/?q=大室山" },
+          { time: "14:10 - 14:30", type: "自駕", title: "開車到伊豆仙人掌動物公園", desc: "兩景點相近，開車約 5-10 分鐘。", map: "https://maps.google.com/?q=伊豆仙人掌動物公園" },
+          { time: "14:30 - 16:15", type: "景點", title: "仙人掌動物公園參觀", desc: "觀賞水豚露天溫泉與仙人掌溫室。", map: "https://maps.google.com/?q=伊豆仙人掌動物公園" },
+          { time: "16:15 - 17:00", type: "自駕", title: "開車至守破離，辦理入住", desc: "導航至「伊豆高原宿 Syuhari 守破離」。", map: "https://maps.google.com/?q=伊豆高原宿+Syuhari+守破離" },
+          { time: "17:00 後", type: "住宿", title: "晚餐、溫泉、休息", desc: "依飯店規定最晚入住時間享用晚餐與溫泉。", map: "https://maps.google.com/?q=伊豆高原宿+Syuhari+守破離" }
+        ]
+      },
+      4: {
+        subtitle: "D4 | 10/26 (一)",
+        title: "伊豆全景・名古屋還車",
+        events: [
+          { time: "08:00 - 09:00", type: "住宿", title: "守破離早餐、退房", desc: "享用早餐後辦理退房。", map: "https://maps.google.com/?q=伊豆高原宿+Syuhari+守破離" },
+          { time: "09:00 - 10:10", type: "自駕", title: "開車至伊豆全景公園", desc: "開車前往伊豆全景公園。", map: "https://maps.google.com/?q=伊豆全景公園" },
+          { time: "10:10 - 11:30", type: "景點", title: "纜車、碧 Terrace", desc: "搭纜車登上山頂碧 Terrace 欣賞富士山美景。", map: "https://maps.google.com/?q=伊豆全景公園" },
+          { time: "11:30 - 12:00", type: "美食", title: "簡單午餐／準備出發", desc: "享用簡單午餐，準備長途開車往名古屋。", map: "https://maps.google.com/?q=伊豆全景公園" },
+          { time: "12:00 - 18:00", type: "自駕", title: "長途開車往名古屋", desc: "預留 4-6 小時以上含塞車、休息及加油彈性。", map: "https://maps.google.com/?q=Toyota+Rent+a+Car+名古屋站前店" },
+          { time: "18:00 - 19:20", type: "自駕", title: "名古屋市區加油、確認還車入口", desc: "前往加油站加滿油，確認還車入口。", map: "https://maps.google.com/?q=Toyota+Rent+a+Car+名古屋站前店" },
+          { time: "20:00 前", type: "自駕", title: "Toyota 名古屋站前還車", desc: "地址：名古屋市中村區名站 4-5-26。20:00 前完成還車。", map: "https://maps.google.com/?q=Toyota+Rent+a+Car+名古屋站前店" },
+          { time: "20:00 - 20:40", type: "住宿", title: "步行至三井花園飯店名古屋普米爾入住", desc: "有兩筆連續訂單，請告知櫃台確認保留同房間。", map: "https://maps.google.com/?q=三井花園飯店名古屋普米爾" }
+        ]
+      },
+      5: {
+        subtitle: "D5 | 10/27 (二)",
+        title: "名古屋自由活動",
+        events: [
+          { time: "09:00 - 10:00", type: "休息", title: "早餐、休息", desc: "悠閒享用早餐。", map: "https://maps.google.com/?q=三井花園飯店名古屋普米爾" },
+          { time: "10:00 - 11:30", type: "購物", title: "名古屋站、JR Gate Tower／百貨", desc: "逛車站周邊商場。", map: "https://maps.google.com/?q=名古屋站" },
+          { time: "11:30 - 12:30", type: "美食", title: "午餐", desc: "享用名古屋在地午餐。", map: "https://maps.google.com/?q=名古屋站" },
+          { time: "12:30 - 13:00", type: "交通", title: "東山線 (黃色) + 鶴舞線 (藍色) 前往大須觀音", desc: "搭東山線 H 至伏見，轉鶴舞線 T 至大須觀音 T08。", map: "https://maps.google.com/?q=大須觀音" },
+          { time: "13:00 - 15:30", type: "景點", title: "大須商店街逛街", desc: "漫步大須商店街。", map: "https://maps.google.com/?q=大須商店街" },
+          { time: "15:30 - 17:30", type: "景點", title: "視體力前往榮或直接回名古屋站", desc: "依體力前往榮商圈。", map: "https://maps.google.com/?q=榮+名古屋" },
+          { time: "18:00 後", type: "休息", title: "晚餐、回三井花園飯店休息", desc: "今天週二吉卜力公園休園，門票排在明日 10/28。", map: "https://maps.google.com/?q=三井花園飯店名古屋普米爾" }
+        ]
+      },
+      6: {
+        subtitle: "D6 | 10/28 (三)",
+        title: "吉卜力公園・行李宅配",
+        events: [
+          { time: "07:15 - 07:45", type: "準備", title: "早餐、整理票券／護照／隨身用品", desc: "確認帶齊門票 QR Code 與護照。", map: "https://maps.google.com/?q=三井花園飯店名古屋普米爾" },
+          { time: "07:45 - 08:35", type: "交通", title: "名古屋站搭東山線 (黃色) 往藤丘", desc: "搭市營地鐵東山線 H 至終點藤丘 H22。", map: "https://maps.google.com/?q=藤丘站" },
+          { time: "08:35 - 09:05", type: "交通", title: "藤丘轉 Linimo 磁浮列車到愛・地球博記念公園", desc: "轉乘 Linimo 東部丘陵線 L (藍色系) 至愛・地球博記念公園 L07。", map: "https://maps.google.com/?q=愛・地球博記念公園" },
+          { time: "09:05 - 09:45", type: "景點", title: "步行至園區與指定入口", desc: "提前抵達指定入口。", map: "https://maps.google.com/?q=吉卜力公園" },
+          { time: "10:00 - 16:30", type: "景點", title: "吉卜力公園參觀 (10:00 入場)", desc: "依預約時段暢遊吉卜力大倉庫。", map: "https://maps.google.com/?q=吉卜力公園" },
+          { time: "16:30 - 18:00", type: "交通", title: "Linimo + 東山線返回名古屋，晚餐", desc: "返回名古屋站享用晚餐。", map: "https://maps.google.com/?q=名古屋站" },
+          { time: "18:00 - 20:00", type: "備忘", title: "詢問行李宅配至大阪 IAM HOTEL", desc: "英文例句：\"I'd like to send this suitcase to IAM HOTEL in Osaka. Can it arrive on October 29?\"", map: "https://maps.google.com/?q=三井花園飯店名古屋普米爾" },
+          { time: "晚上", type: "備忘", title: "宅配備案規劃", desc: "若無法隔日送達，改為隨身帶往京都並利用車站寄物櫃。", map: "https://maps.google.com/?q=三井花園飯店名古屋普米爾" }
+        ]
+      },
+      7: {
+        subtitle: "D7 | 10/29 (四)",
+        title: "名古屋・下鴨神社・大阪",
+        events: [
+          { time: "07:30 - 08:20", type: "住宿", title: "早餐、三井花園退房", desc: "退房與確認行李。", map: "https://maps.google.com/?q=三井花園飯店名古屋普米爾" },
+          { time: "08:20 - 09:00", type: "交通", title: "購買／使用新幹線票", desc: "新幹線需購買實體車票。", map: "https://maps.google.com/?q=名古屋站" },
+          { time: "09:00 - 09:50", type: "交通", title: "新幹線名古屋 → 京都", desc: "搭乘東海道新幹線往新大阪方向至京都站。", map: "https://maps.google.com/?q=京都站" },
+          { time: "09:50 - 10:45", type: "交通", title: "京都站搭 JR 奈良線到東福寺，轉京阪至出町柳", desc: "轉乘京阪本線往出町柳至終點站。", map: "https://maps.google.com/?q=出町柳站" },
+          { time: "10:45 - 11:10", type: "交通", title: "步行前往下鴨神社", desc: "步行約 12-20 分鐘。", map: "https://maps.google.com/?q=下鴨神社" },
+          { time: "11:10 - 12:40", type: "景點", title: "糾之森、下鴨神社參拜", desc: "世界遺產古老森林與神社參拜。", map: "https://maps.google.com/?q=下鴨神社" },
+          { time: "12:40 - 13:40", type: "美食", title: "附近午餐／散步", desc: "鴨川周邊午餐。", map: "https://maps.google.com/?q=下鴨神社" },
+          { time: "13:40 - 15:10", type: "交通", title: "出町柳 → 大阪 IAM HOTEL (京阪 + 堺筋線棕色)", desc: "搭京阪至北浜 → 轉大阪 Metro 堺筋線 K (棕色) 至日本橋站 K17。", map: "https://maps.google.com/?q=IAM+HOTEL" },
+          { time: "15:10 - 16:00", type: "住宿", title: "步行至 IAM HOTEL，入住/領行李", desc: "入住飯店並領取行李。", map: "https://maps.google.com/?q=IAM+HOTEL" },
+          { time: "16:00 - 20:00", type: "景點", title: "心齋橋、道頓堀、難波與晚餐", desc: "道頓堀跑跑人打卡與商圈購物。", map: "https://maps.google.com/?q=心齋橋" }
+        ]
+      },
+      8: {
+        subtitle: "D8 | 10/30 (五)",
+        title: "大阪・關西機場・高雄 (亞航 AK171)",
+        events: [
+          { time: "07:30 - 08:15", type: "住宿", title: "早餐、IAM HOTEL 退房", desc: "退房並整理行李。", map: "https://maps.google.com/?q=IAM+HOTEL" },
+          { time: "08:15 - 08:45", type: "交通", title: "步行到南海難波站", desc: "注意：大阪 Metro 難波站與南海難波站月台不同。", map: "https://maps.google.com/?q=南海難波站" },
+          { time: "08:45 - 09:45", type: "交通", title: "南海機場急行或 Rapi:t 至關西空港站", desc: "搭乘南海電鐵至終點關西空港站。", map: "https://maps.google.com/?q=關西國際機場" },
+          { time: "09:45 - 11:00", type: "機場", title: "步行至 KIX 第 1 航廈 找亞航櫃台", desc: "前往 KIX 第 1 航廈辦理馬來西亞亞洲航空 AK171 報到。", map: "https://maps.google.com/?q=關西國際機場" },
+          { time: "11:00 - 14:10", type: "機場", title: "托運、安檢、出境", desc: "完成安檢與出境手續，前往登機門。", map: "https://maps.google.com/?q=關西國際機場" },
+          { time: "14:10 - 16:30", type: "航班", title: "關西機場起飛 → 高雄抵達 (亞航 AK171)", desc: "搭乘亞航 AK171，14:10 關西機場 T1 起飛，16:30 返抵高雄。", map: "https://maps.google.com/?q=關西國際機場" }
+        ]
+      }
+    };
+
+    let storeData = {
+      userEvents: {},
+      accounting: [],
+      packing: [
+        { id: 1, name: "護照與機票列印本", checked: true },
+        { id: 2, name: "台灣駕照正本 + 日文譯本", checked: true },
+        { id: 3, name: "吉卜力門票 QR Code", checked: true },
+        { id: 4, name: "行動電源與充電線", checked: false }
+      ],
+      shopping: [],
+      qrItems: []
+    };
+
+    function initData() {
+      try {
+        const raw = localStorage.getItem(TRIP_KEY);
+        if (raw) {
+          const value = JSON.parse(raw);
+          if (validTripStore(value)) storeData = {...storeData, ...value, qrItems: Array.isArray(value.qrItems) ? value.qrItems : []};
+          else alert('本機資料格式異常，尚未覆蓋原始資料。請先備份。');
+        }
+      } catch (e) { alert('讀取本機資料失敗：' + e.message); }
+    }
+
+    function saveData() {
+      const badge = document.getElementById('save-status-badge');
+      try {
+        const value = JSON.stringify(storeData);
+        localStorage.setItem(TRIP_KEY, value);
+        if (localStorage.getItem(TRIP_KEY) !== value) throw new Error('寫入驗證失敗');
+        badge.innerHTML = '<i class="fa-solid fa-check text-green-600"></i> 已儲存';
+        setTimeout(() => { if (badge.textContent.includes('已儲存')) badge.textContent = '本機儲存'; }, 1400);
+        if (window.cloudOnLocalSave) window.cloudOnLocalSave();
+        return true;
+      } catch (e) {
+        badge.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> 儲存失敗';
+        badge.classList.add('text-red-600');
+        alert('⚠️ 資料未能存入手機！可能是照片或 QR 圖片太大。請勿關閉頁面，先嘗試匯出 JSON 備份。\n' + e.message);
+        return false;
+      }
+    }
+
+    function switchTab(tabName) {
+      document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+      document.querySelectorAll('.nav-tab').forEach(el => {
+        el.classList.remove('active');
+        el.classList.add('text-themeMuted');
+      });
+
+      document.getElementById(`tab-${tabName}`).classList.remove('hidden');
+      const btn = document.getElementById(`tab-btn-${tabName}`);
+      btn.classList.add('active');
+      btn.classList.remove('text-themeMuted');
+    }
+
+    let currentDay = 1;
+    function switchDay(dayNum) {
+      currentDay = dayNum;
+      document.querySelectorAll('.day-tab').forEach(b => b.classList.remove('active'));
+      document.getElementById(`day-btn-${dayNum}`).classList.add('active');
+      renderDayContent(dayNum);
+    }
+
+    function toggleCollapse(headerEl) {
+      const content = headerEl.nextElementSibling;
+      const icon = headerEl.querySelector('.fa-chevron-down');
+      if (content.style.display === 'none') {
+        content.style.display = 'block';
+        if(icon) icon.style.transform = 'rotate(180deg)';
+      } else {
+        content.style.display = 'none';
+        if(icon) icon.style.transform = 'rotate(0deg)';
+      }
+    }
+
+    // 燈箱控制
+    function openImageModal(imgSrc) {
+      document.getElementById('modal-img-element').src = imgSrc;
+      document.getElementById('image-modal').classList.remove('hidden');
+    }
+    function closeImageModal() {
+      document.getElementById('image-modal').classList.add('hidden');
+    }
+
+    function esc(v) { return String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+    function safeUrl(v) { try { const u = new URL(String(v)); return ['https:','http:'].includes(u.protocol) ? esc(u.href) : ''; } catch { return ''; } }
+    function validTripStore(v) { return !!v && typeof v==='object' && !Array.isArray(v) && !!v.userEvents && typeof v.userEvents==='object' && !Array.isArray(v.userEvents) && Object.values(v.userEvents).every(Array.isArray) && ['accounting','packing','shopping'].every(k=>Array.isArray(v[k])) && (v.qrItems===undefined || Array.isArray(v.qrItems)); }
+    const TRIP_KEY = 'japan_trip_2026_style_v7';
+    function renderDayContent(day) {
+      const data = pdfData[day];
+      document.getElementById('day-subtitle').textContent = data.subtitle;
+      document.getElementById('day-main-title').textContent = data.title;
+
+      const container = document.getElementById('day-events-container');
+      container.innerHTML = '';
+
+      data.events.forEach((evt, idx) => {
+        const userNotes = (storeData.userEvents[`${day}_${idx}`] || []);
+
+        let userNotesHtml = userNotes.map((n, nIdx) => `
+          <div class="mt-2 p-2.5 bg-themeHeader rounded-xl border border-themeBorder text-xs flex justify-between items-start" id="note-view-${day}-${idx}-${nIdx}">
+            <div class="space-y-1 flex-1 pr-2">
+              <div class="font-extrabold text-themeGreen">${esc(n.name)} ${n.important ? '<span class="text-amber-700">★ 必去</span>' : ''} ${n.note ? `<span class="text-themeMuted font-normal">(${esc(n.note)})</span>` : ''}</div>
+              ${(n.booking || n.price) ? `<div class="text-themeMuted">${n.booking ? '預約：'+esc(n.booking) : ''} ${n.price ? '｜預算 ¥'+esc(n.price) : ''}</div>` : ''}
+              ${n.img ? `<img src="${n.img}" onclick="openImageModal('${n.img}')" class="w-full max-h-36 object-cover rounded-lg my-1 cursor-pointer hover:opacity-90 transition border border-themeBorder" title="點擊放大圖片">` : ''}
+              ${n.url ? `<a href="${n.url}" target="_blank" class="text-blue-600 underline block text-[11px]"><i class="fa-solid fa-link"></i> 相關連結</a>` : ''}
+              ${n.keyword ? `<a href="https://maps.google.com/?q=${encodeURIComponent(n.keyword)}" target="_blank" class="text-amber-700 block text-[11px] font-semibold"><i class="fa-solid fa-location-dot"></i> 搜尋: ${n.keyword}</a>` : ''}
+            </div>
+            <div class="flex gap-1.5">
+              <button onclick="startEditUserNote(${day}, ${idx}, ${nIdx})" class="text-blue-600 hover:text-blue-800 p-1" title="編輯"><i class="fa-solid fa-pen"></i></button>
+              <button onclick="deleteUserNote(${day}, ${idx}, ${nIdx})" class="text-gray-400 hover:text-red-500 p-1" title="刪除"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+          </div>
+          <!-- 編輯表單 (預設隱藏) -->
+          <div id="note-edit-${day}-${idx}-${nIdx}" class="mt-2 p-3 bg-white rounded-xl border border-themeGreen space-y-2 text-xs hidden">
+            <div class="font-bold text-themeGreen">編輯備忘</div>
+            <input type="text" id="edit-name-${day}-${idx}-${nIdx}" value="${esc(n.name)}" class="w-full border border-themeBorder rounded-xl p-2 bg-white">
+            <input type="text" id="edit-note-${day}-${idx}-${nIdx}" value="${esc(n.note || '')}" placeholder="備註" class="w-full border border-themeBorder rounded-xl p-2 bg-white">
+            <input type="text" id="edit-kw-${day}-${idx}-${nIdx}" value="${esc(n.keyword || '')}" placeholder="地圖關鍵字" class="w-full border border-themeBorder rounded-xl p-2 bg-white">
+            <input type="url" id="edit-url-${day}-${idx}-${nIdx}" value="${esc(n.url || '')}" placeholder="相關連結 URL" class="w-full border border-themeBorder rounded-xl p-2 bg-white">
+            <div class="grid grid-cols-2 gap-2"><input id="edit-booking-${day}-${idx}-${nIdx}" value="${esc(n.booking || '')}" placeholder="預約時間／編號" class="border border-themeBorder rounded-xl p-2"><input id="edit-price-${day}-${idx}-${nIdx}" type="number" min="0" value="${esc(n.price || '')}" placeholder="預算 ¥" class="border border-themeBorder rounded-xl p-2"></div>
+            <label class="flex gap-2 items-center"><input id="edit-important-${day}-${idx}-${nIdx}" type="checkbox" ${n.important?'checked':''}> ★ 必去</label>
+            <div class="flex gap-2 pt-1">
+              <button onclick="saveEditUserNote(${day}, ${idx}, ${nIdx})" class="flex-1 bg-themeGreen text-white py-1.5 rounded-xl font-bold">儲存</button>
+              <button onclick="cancelEditUserNote(${day}, ${idx}, ${nIdx})" class="flex-1 bg-gray-200 text-gray-700 py-1.5 rounded-xl font-bold">取消</button>
+            </div>
+          </div>
+        `).join('');
+
+        const card = document.createElement('div');
+        card.className = "bg-white rounded-2xl p-4 border border-themeBorder space-y-3";
+        card.innerHTML = `
+          <div class="flex justify-between items-center text-xs">
+            <span class="px-2.5 py-1 rounded-full bg-themeHeader font-extrabold text-themeText border border-themeBorder flex items-center gap-1">
+              <i class="fa-regular fa-clock text-themeMuted"></i> ${evt.time}
+            </span>
+            <span class="px-2.5 py-0.5 rounded-full bg-themeGreenLight text-themeGreen font-bold border border-emerald-200">
+              ${evt.type}
+            </span>
+          </div>
+
+          <div>
+            <h3 class="text-sm font-extrabold text-themeText">${evt.title}</h3>
+            <p class="text-xs text-themeMuted mt-1 leading-relaxed">${evt.desc}</p>
+          </div>
+
+          ${userNotesHtml}
+
+          <div class="border border-themeBorder rounded-xl overflow-hidden bg-themeHeader">
+            <div onclick="toggleCollapse(this)" class="p-2.5 text-xs font-bold text-themeText flex justify-between items-center cursor-pointer select-none hover:bg-black/5 transition">
+              <span class="flex items-center gap-1.5"><i class="fa-solid fa-circle-plus text-themeGreen"></i> 新增備忘/餐廳/店家</span>
+              <i class="fa-solid fa-chevron-down text-themeMuted transition-transform duration-200" style="transform: rotate(0deg);"></i>
+            </div>
+            <div style="display: none;" class="p-3 border-t border-themeBorder bg-white space-y-2">
+              <div class="grid grid-cols-2 gap-2 text-xs">
+                <input type="text" id="un-name-${day}-${idx}" placeholder="名稱 (例如: 敘敘苑燒肉)" class="border border-themeBorder rounded-xl p-2 bg-white focus:outline-none">
+                <input type="text" id="un-note-${day}-${idx}" placeholder="備註 (例如: 需提前預約)" class="border border-themeBorder rounded-xl p-2 bg-white focus:outline-none">
+              </div>
+              <div class="grid grid-cols-2 gap-2 text-xs">
+                <input type="text" id="un-kw-${day}-${idx}" placeholder="地圖關鍵字 (例如: 敘敘苑新宿)" class="border border-themeBorder rounded-xl p-2 bg-white focus:outline-none">
+                <input type="url" id="un-url-${day}-${idx}" placeholder="相關連結 URL (選填)" class="border border-themeBorder rounded-xl p-2 bg-white focus:outline-none">
+              </div>
+              <div class="grid grid-cols-2 gap-2 text-xs"><input id="un-booking-${day}-${idx}" placeholder="預約時間／編號" class="border border-themeBorder rounded-xl p-2"><input id="un-price-${day}-${idx}" type="number" min="0" placeholder="預算 ¥" class="border border-themeBorder rounded-xl p-2"></div>
+              <label class="text-xs flex items-center gap-2"><input id="un-important-${day}-${idx}" type="checkbox"> ★ 必去</label>
+              <div class="grid grid-cols-4 gap-2 text-xs">
+                <label class="col-span-3 border border-themeBorder rounded-xl p-2 bg-themeHeader text-themeMuted text-center cursor-pointer font-medium flex items-center justify-center gap-1">
+                  <i class="fa-solid fa-image"></i> <span id="un-img-label-${day}-${idx}">選擇照片</span>
+                  <input type="file" accept="image/*" onchange="handleImageUpload(event, 'un-img-${day}-${idx}', 'un-img-label-${day}-${idx}')" class="hidden">
+                </label>
+                <button onclick="addUserNote(${day}, ${idx})" class="col-span-1 bg-themeGreen text-white rounded-xl font-bold hover:bg-themeGreenHover transition">
+                  新增
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="pt-1 flex justify-end">
+            <a href="${evt.map}" target="_blank" class="inline-flex items-center gap-1 px-3 py-1.5 rounded-full bg-themeHeader text-themeText font-bold text-xs border border-themeBorder hover:bg-gray-100 transition">
+              <i class="fa-solid fa-location-dot text-themeGreen"></i> 開啟地圖導航
+            </a>
+          </div>
+        `;
+
+        container.appendChild(card);
+      });
+    }
+
+    async function handleImageUpload(e, targetVarName, labelId) {
+      const file = e.target.files?.[0]; if (!file) return;
+      const label = document.getElementById(labelId);
+      try {
+        if (!file.type.startsWith('image/')) throw new Error('請選擇圖片');
+        if (file.size > 18 * 1024 * 1024) throw new Error('圖片超過 18MB，請先縮小');
+        const data = await new Promise((resolve,reject) => {
+          const r = new FileReader(); r.onload = () => resolve(r.result); r.onerror=()=>reject(new Error('讀取失敗')); r.readAsDataURL(file);
+        });
+        if (targetVarName === 'qr-img-data') {
+          // QR/條碼保留原始清晰度，不使用有損壓縮，以免掃碼失敗。
+          tempUploadImages[targetVarName] = data;
+        } else {
+          const img = await new Promise((resolve,reject) => { const i=new Image(); i.onload=()=>resolve(i); i.onerror=()=>reject(new Error('圖片格式無法讀取')); i.src=data; });
+          const scale = Math.min(1, 1280 / Math.max(img.width,img.height));
+          const canvas = document.createElement('canvas'); canvas.width=Math.round(img.width*scale); canvas.height=Math.round(img.height*scale);
+          canvas.getContext('2d').drawImage(img,0,0,canvas.width,canvas.height);
+          const compressed = canvas.toDataURL('image/jpeg',0.79);
+          tempUploadImages[targetVarName] = compressed.length < data.length ? compressed : data;
+        }
+        if(label) label.textContent = '已選擇照片';
+      } catch(err) { alert('照片處理失敗：'+err.message); e.target.value=''; }
+    }
+
+    function addUserNote(day, idx) {
+      const name = document.getElementById(`un-name-${day}-${idx}`).value.trim();
+      const note = document.getElementById(`un-note-${day}-${idx}`).value.trim();
+      const kw = document.getElementById(`un-kw-${day}-${idx}`).value.trim();
+      const url = document.getElementById(`un-url-${day}-${idx}`).value.trim();
+      const imgKey = `un-img-${day}-${idx}`;
+      const img = tempUploadImages[imgKey] || "";
+
+      if (!name) return;
+
+      const key = `${day}_${idx}`;
+      if (!storeData.userEvents[key]) storeData.userEvents[key] = [];
+
+      const booking = document.getElementById(`un-booking-${day}-${idx}`).value.trim();
+      const price = Math.max(0, Number(document.getElementById(`un-price-${day}-${idx}`).value) || 0);
+      const important = document.getElementById(`un-important-${day}-${idx}`).checked;
+      storeData.userEvents[key].push({ name, note, keyword: kw, url, img, booking, price, important });
+      delete tempUploadImages[imgKey];
+
+      saveData();
+      renderDayContent(day);
+    }
+
+    function deleteUserNote(day, idx, nIdx) {
+      if (!confirm('確定刪除這筆備註嗎？')) return;
+      const key = `${day}_${idx}`;
+      storeData.userEvents[key].splice(nIdx, 1);
+      saveData();
+      renderDayContent(day);
+    }
+
+    function startEditUserNote(day, idx, nIdx) {
+      document.getElementById(`note-view-${day}-${idx}-${nIdx}`).classList.add('hidden');
+      document.getElementById(`note-edit-${day}-${idx}-${nIdx}`).classList.remove('hidden');
+    }
+
+    function cancelEditUserNote(day, idx, nIdx) {
+      document.getElementById(`note-view-${day}-${idx}-${nIdx}`).classList.remove('hidden');
+      document.getElementById(`note-edit-${day}-${idx}-${nIdx}`).classList.add('hidden');
+    }
+
+    function saveEditUserNote(day, idx, nIdx) {
+      const key = `${day}_${idx}`;
+      const name = document.getElementById(`edit-name-${day}-${idx}-${nIdx}`).value.trim();
+      const note = document.getElementById(`edit-note-${day}-${idx}-${nIdx}`).value.trim();
+      const kw = document.getElementById(`edit-kw-${day}-${idx}-${nIdx}`).value.trim();
+      const url = document.getElementById(`edit-url-${day}-${idx}-${nIdx}`).value.trim();
+
+      if (!name) return;
+
+      storeData.userEvents[key][nIdx].name = name;
+      storeData.userEvents[key][nIdx].note = note;
+      storeData.userEvents[key][nIdx].keyword = kw;
+      storeData.userEvents[key][nIdx].url = url;
+      storeData.userEvents[key][nIdx].booking = document.getElementById(`edit-booking-${day}-${idx}-${nIdx}`).value.trim();
+      storeData.userEvents[key][nIdx].price = Math.max(0, Number(document.getElementById(`edit-price-${day}-${idx}-${nIdx}`).value) || 0);
+      storeData.userEvents[key][nIdx].important = document.getElementById(`edit-important-${day}-${idx}-${nIdx}`).checked;
+
+      saveData();
+      renderDayContent(day);
+    }
+
+    // --- QR 區專屬邏輯 ---
+    function handleAddQr(e) {
+      e.preventDefault();
+      const title = document.getElementById('qr-title').value.trim();
+      const note = document.getElementById('qr-note').value.trim();
+      const img = tempUploadImages['qr-img-data'] || "";
+
+      if (!title || !img) return;
+
+      if (!storeData.qrItems) storeData.qrItems = [];
+      storeData.qrItems.push({ id: Date.now(), title, note, img });
+      delete tempUploadImages['qr-img-data'];
+
+      saveData();
+      renderQrList();
+
+      e.target.reset();
+      document.getElementById('qr-img-label').textContent = "選擇 QR 圖片";
+    }
+
+    function renderQrList() {
+      const listEl = document.getElementById('qr-items-list');
+      if (!storeData.qrItems) storeData.qrItems = [];
+
+      listEl.innerHTML = storeData.qrItems.map((item, idx) => `
+        <div class="bg-white rounded-2xl p-4 border border-themeBorder space-y-2 text-xs" id="qr-view-${item.id}">
+          <div class="flex items-start justify-between">
+            <div>
+              <h4 class="font-extrabold text-sm text-themeText">${item.title}</h4>
+              ${item.note ? `<p class="text-themeMuted mt-0.5">${item.note}</p>` : ''}
+            </div>
+            <div class="flex gap-1.5">
+              <button onclick="startEditQr(${item.id})" class="text-blue-600 hover:text-blue-800 p-1" title="編輯"><i class="fa-solid fa-pen"></i></button>
+              <button onclick="deleteQr(${item.id})" class="text-gray-400 hover:text-red-500 p-1" title="刪除"><i class="fa-solid fa-trash-can"></i></button>
+            </div>
+          </div>
+          ${item.img ? `<div class="bg-themeHeader p-2 rounded-xl text-center"><img src="${item.img}" onclick="openImageModal('${item.img}')" class="max-h-48 mx-auto object-contain rounded-lg cursor-pointer hover:opacity-90 transition" title="點擊放大 QR 圖片"></div>` : ''}
+        </div>
+        <!-- QR 編輯表單 -->
+        <div id="qr-edit-${item.id}" class="bg-white rounded-2xl p-4 border border-themeGreen space-y-2 text-xs hidden">
+          <div class="font-bold text-themeGreen">編輯票券 QR</div>
+          <input type="text" id="edit-qr-title-${item.id}" value="${item.title}" class="w-full border border-themeBorder rounded-xl p-2 bg-white">
+          <input type="text" id="edit-qr-note-${item.id}" value="${item.note || ''}" placeholder="備註" class="w-full border border-themeBorder rounded-xl p-2 bg-white">
+          <div class="flex gap-2 pt-1">
+            <button onclick="saveEditQr(${item.id})" class="flex-1 bg-themeGreen text-white py-1.5 rounded-xl font-bold">儲存</button>
+            <button onclick="cancelEditQr(${item.id})" class="flex-1 bg-gray-200 text-gray-700 py-1.5 rounded-xl font-bold">取消</button>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function deleteQr(id) {
+      if (!confirm('確定刪除這筆QR 票券嗎？')) return;
+      storeData.qrItems = storeData.qrItems.filter(i => i.id !== id);
+      saveData();
+      renderQrList();
+    }
+
+    function startEditQr(id) {
+      document.getElementById(`qr-view-${id}`).classList.add('hidden');
+      document.getElementById(`qr-edit-${id}`).classList.remove('hidden');
+    }
+    function cancelEditQr(id) {
+      document.getElementById(`qr-view-${id}`).classList.remove('hidden');
+      document.getElementById(`qr-edit-${id}`).classList.add('hidden');
+    }
+    function saveEditQr(id) {
+      const title = document.getElementById(`edit-qr-title-${id}`).value.trim();
+      const note = document.getElementById(`edit-qr-note-${id}`).value.trim();
+      if (!title) return;
+
+      const item = storeData.qrItems.find(i => i.id === id);
+      if (item) {
+        item.title = title;
+        item.note = note;
+        saveData();
+        renderQrList();
+      }
+    }
+
+    // --- 記帳本邏輯 ---
+    function autoCalcTwd(jpy) {
+      if (!jpy) {
+        document.getElementById('acc-twd').value = '';
+        return;
+      }
+      document.getElementById('acc-twd').value = Math.round(jpy * 0.21);
+    }
+
+    function handleAddAccounting(e) {
+      e.preventDefault();
+      const title = document.getElementById('acc-title').value.trim();
+      const cat = document.getElementById('acc-cat').value;
+      const jpy = Number(document.getElementById('acc-jpy').value);
+      const twd = Number(document.getElementById('acc-twd').value) || Math.round(jpy * 0.21);
+      const note = document.getElementById('acc-note').value.trim();
+      const img = tempUploadImages['acc-img-data'] || "";
+
+      storeData.accounting.push({ id: Date.now(), title, cat, jpy, twd, note, img });
+      delete tempUploadImages['acc-img-data'];
+
+      saveData();
+      renderAccounting();
+
+      e.target.reset();
+      document.getElementById('acc-img-label').textContent = "選擇照片/收據";
+    }
+
+    function renderAccounting() {
+      let totalJpy = 0, totalTwd = 0;
+      const listEl = document.getElementById('accounting-items-list');
+      listEl.innerHTML = '';
+
+      storeData.accounting.forEach(item => {
+        totalJpy += item.jpy;
+        totalTwd += item.twd;
+
+        const el = document.createElement('div');
+        el.className = "p-3 bg-themeHeader rounded-xl border border-themeBorder flex justify-between items-start text-xs";
+        el.innerHTML = `
+          <div class="space-y-1">
+            <div class="font-bold text-themeText">${item.title} <span class="px-2 py-0.5 rounded bg-white text-themeMuted text-[10px] border border-themeBorder">${item.cat}</span></div>
+            ${item.note ? `<div class="text-themeMuted">${item.note}</div>` : ''}
+            ${item.img ? `<img src="${item.img}" onclick="openImageModal('${item.img}')" class="w-full max-h-32 object-cover rounded-lg my-1 cursor-pointer hover:opacity-90 transition border border-themeBorder" title="點擊放大收據">` : ''}
+          </div>
+          <div class="text-right">
+            <div class="font-extrabold text-themeText text-sm">¥ ${item.jpy.toLocaleString()}</div>
+            <div class="text-amber-700 font-bold">NT$ ${item.twd.toLocaleString()}</div>
+            <button onclick="editAccounting(${item.id})" class="text-blue-600 mt-1 mr-2" title="編輯"><i class="fa-solid fa-pen"></i></button>
+            <button onclick="deleteAccounting(${item.id})" class="text-gray-400 hover:text-red-500 mt-1"><i class="fa-solid fa-trash-can"></i></button>
+          </div>
+        `;
+        listEl.appendChild(el);
+      });
+
+      document.getElementById('total-jpy').textContent = `¥ ${totalJpy.toLocaleString()}`;
+      document.getElementById('total-twd').textContent = `$ ${totalTwd.toLocaleString()}`;
+      document.getElementById('acc-count').textContent = `${storeData.accounting.length} 筆`;
+      document.getElementById('acc-avg-jpy').textContent = `¥ ${Math.round(totalJpy / 8).toLocaleString()}`;
+    }
+
+    function editAccounting(id) {
+      const item=storeData.accounting.find(x=>x.id===id);if(!item)return;
+      const title=prompt('記帳項目',item.title);if(title===null||!title.trim())return;
+      const jpy=prompt('日幣金額',item.jpy);if(jpy===null)return;
+      const twd=prompt('台幣金額',item.twd);if(twd===null)return;
+      const note=prompt('備註',item.note||'');if(note===null)return;
+      if(![jpy,twd].every(x=>x.trim()!==''&&Number.isFinite(Number(x))&&Number(x)>=0))return alert('金額不正確');
+      Object.assign(item,{title:title.trim(),jpy:Number(jpy),twd:Number(twd),note});saveData();renderAccounting();
+    }
+
+    function deleteAccounting(id) {
+      if (!confirm('確定刪除這筆記帳嗎？')) return;
+      storeData.accounting = storeData.accounting.filter(i => i.id !== id);
+      saveData();
+      renderAccounting();
+    }
+
+    function handleAddPacking(e) {
+      e.preventDefault();
+      const input = document.getElementById('packing-input');
+      if (!input.value.trim()) return;
+
+      storeData.packing.push({ id: Date.now(), name: input.value.trim(), checked: false });
+      saveData();
+      renderPacking();
+      input.value = '';
+    }
+
+    function renderPacking() {
+      const listEl = document.getElementById('packing-items-list');
+      listEl.innerHTML = storeData.packing.map(item => `
+        <div class="flex items-center justify-between p-2.5 bg-themeHeader rounded-xl border border-themeBorder">
+          <label class="flex items-center gap-2 cursor-pointer flex-1">
+            <input type="checkbox" ${item.checked ? 'checked' : ''} onchange="togglePacking(${item.id})" class="rounded text-themeGreen focus:ring-themeGreen">
+            <span class="${item.checked ? 'line-through text-themeMuted' : 'text-themeText font-medium'}">${item.name}</span>
+          </label>
+          <button onclick="deletePacking(${item.id})" class="text-gray-400 hover:text-red-500"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+      `).join('');
+    }
+
+    function togglePacking(id) {
+      const item = storeData.packing.find(i => i.id === id);
+      if (item) { item.checked = !item.checked; saveData(); renderPacking(); }
+    }
+
+    function deletePacking(id) {
+      if (!confirm('確定刪除這筆行李嗎？')) return;
+      storeData.packing = storeData.packing.filter(i => i.id !== id);
+      saveData();
+      renderPacking();
+    }
+
+    function handleAddShopping(e) {
+      e.preventDefault();
+      const title = document.getElementById('shop-title').value.trim();
+      const cat = document.getElementById('shop-cat').value;
+      const url = document.getElementById('shop-url').value.trim();
+      const note = document.getElementById('shop-note').value.trim();
+      const img = tempUploadImages['shop-img-data'] || "";
+
+      const price = Math.max(0, Number(document.getElementById('shop-price').value) || 0);
+      const qty = Math.max(1, Math.floor(Number(document.getElementById('shop-qty').value) || 1));
+      storeData.shopping.push({ id: Date.now(), title, cat, url, note, img, checked: false, price, qty });
+      delete tempUploadImages['shop-img-data'];
+
+      saveData();
+      renderShopping();
+
+      e.target.reset();
+      document.getElementById('shop-img-label').textContent = "選擇商品照片";
+      document.getElementById('shop-qty').value = '1';
+    }
+
+    function renderShopping() {
+      const listEl = document.getElementById('shopping-items-list');
+      listEl.innerHTML = storeData.shopping.map(item => `
+        <div class="bg-white rounded-2xl p-4 border border-themeBorder space-y-2 text-xs">
+          <div class="flex items-start justify-between">
+            <label class="flex items-center gap-2 cursor-pointer font-bold text-sm">
+              <input type="checkbox" ${item.checked ? 'checked' : ''} onchange="toggleShopping(${item.id})" class="rounded text-themeGreen">
+              <span class="${item.checked ? 'line-through text-themeMuted' : 'text-themeText'}">${item.title}</span>
+            </label>
+            <span class="px-2 py-0.5 rounded-full bg-themeHeader text-themeMuted text-[10px] border border-themeBorder">${item.cat}</span>
+          </div>
+          ${item.img ? `<img src="${item.img}" onclick="openImageModal('${item.img}')" class="w-full max-h-40 object-cover rounded-xl border border-themeBorder cursor-pointer hover:opacity-90 transition" title="點擊放大圖片">` : ''}
+          ${item.note ? `<p class="text-themeMuted">${esc(item.note)}</p>` : ''}
+          <div class="text-themeGreen font-bold">單價 ¥${(Number(item.price)||0).toLocaleString()} × ${Number(item.qty)||1} 件 = ¥${((Number(item.price)||0)*(Number(item.qty)||1)).toLocaleString()}</div>
+          <button onclick="editShopping(${item.id})" class="text-blue-600 font-bold">編輯價格／數量／商品</button>
+          <div class="flex justify-between items-center pt-1 border-t border-themeBorder">
+            ${item.url ? `<a href="${item.url}" target="_blank" class="text-blue-600 underline font-semibold"><i class="fa-solid fa-link"></i> 商品網址</a>` : '<span></span>'}
+            <button onclick="deleteShopping(${item.id})" class="text-gray-400 hover:text-red-500"><i class="fa-solid fa-trash-can"></i></button>
+          </div>
+        </div>
+      `).join('');
+      document.getElementById('shopping-budget').textContent = '未購買預估總額：¥ ' + storeData.shopping.filter(x=>!x.checked).reduce((a,x)=>a+(Number(x.price)||0)*(Number(x.qty)||1),0).toLocaleString();
+    }
+
+    function editShopping(id) {
+      const item=storeData.shopping.find(x=>x.id===id); if(!item)return;
+      const title=prompt('商品名稱',item.title); if(title===null||!title.trim())return;
+      const price=prompt('日幣單價',item.price||0); if(price===null)return;
+      const qty=prompt('數量',item.qty||1); if(qty===null)return;
+      const note=prompt('備註',item.note||''); if(note===null)return;
+      if(!Number.isFinite(Number(price))||Number(price)<0||!Number.isInteger(Number(qty))||Number(qty)<1)return alert('價格或數量不正確');
+      Object.assign(item,{title:title.trim(),price:Number(price),qty:Number(qty),note}); saveData();renderShopping();
+    }
+
+    function toggleShopping(id) {
+      const item = storeData.shopping.find(i => i.id === id);
+      if (item) { item.checked = !item.checked; saveData(); renderShopping(); }
+    }
+
+    function deleteShopping(id) {
+      if (!confirm('確定刪除這筆購物嗎？')) return;
+      storeData.shopping = storeData.shopping.filter(i => i.id !== id);
+      saveData();
+      renderShopping();
+    }
+
+
+    function jumpToday() {
+      const now=new Date(); const day=(now.getFullYear()===2026 && now.getMonth()===9) ? now.getDate()-22 : 0;
+      if(day>=1&&day<=8) {switchTab('itinerary');switchDay(day);} else alert('旅行日期是 2026/10/23–10/30，目前不在旅行期間。');
+    }
+    function searchTrip() {
+      const input=document.getElementById('trip-search-input'), out=document.getElementById('trip-search-results');if(!input||!out)return;
+      const q=input.value.trim().toLocaleLowerCase();if(!q){out.innerHTML='';return;}
+      const hits=[];
+      Object.entries(pdfData).forEach(([day,info])=>info.events.forEach((e,idx)=>{
+        const notes=storeData.userEvents[`${day}_${idx}`]||[];
+        if([info.title,e.title,e.desc,e.time,e.type,...notes.flatMap(n=>[n.name,n.note,n.keyword,n.booking])].some(v=>String(v||'').toLocaleLowerCase().includes(q))) hits.push({day:Number(day),idx,title:e.title});
+      }));
+      out.innerHTML=hits.length ? hits.slice(0,45).map(x=>`<button onclick="switchDay(${x.day});document.getElementById('day-events-container').children[${x.idx}]?.scrollIntoView({behavior:'smooth',block:'center'})" class="block w-full text-left bg-themeHeader rounded-lg p-2 border border-themeBorder">D${x.day} · ${esc(x.title)}</button>`).join('') : '<p class="text-themeMuted">找不到符合的行程或備註</p>';
+    }
+    function updateBackupTime(){const el=document.getElementById('backup-last-time');if(!el)return;const t=localStorage.getItem(TRIP_KEY+'_last_export_at');el.textContent=t?'上次要求匯出：'+new Date(t).toLocaleString('zh-TW')+'（請確認已下載）':'尚未匯出備份';}
+    function exportTripJSON(){
+      try {
+        if(!validTripStore(storeData))throw Error('目前資料格式異常');
+        const payload={format:TRIP_KEY,version:2,exportedAt:new Date().toISOString(),data:storeData};
+        const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json;charset=utf-8'});
+        const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='旅日手帖_含QR備份_'+new Date().toISOString().slice(0,10)+'.json';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);
+        try{localStorage.setItem(TRIP_KEY+'_last_export_at',new Date().toISOString());updateBackupTime();}catch(e){}
+      }catch(e){alert('備份失敗：'+e.message);}
+    }
+    async function importTripJSON(event){
+      const input=event.target,file=input.files?.[0];if(!file)return;
+      try {
+        if(file.size>45*1024*1024)throw Error('檔案超過45MB，請確認來源');
+        const parsed=JSON.parse(await file.text());
+        const data=parsed?.format===TRIP_KEY ? parsed.data : (!parsed?.format?parsed:null);
+        if(!validTripStore(data))throw Error('不是相容的 v7 JSON 備份。其他版本不會自動轉換，原資料未變更。');
+        const incoming={...data,qrItems:Array.isArray(data.qrItems)?data.qrItems:[]};
+        const count=`備註 ${Object.values(incoming.userEvents).reduce((n,x)=>n+x.length,0)} 筆、記帳 ${incoming.accounting.length} 筆、行李 ${incoming.packing.length} 筆、購物 ${incoming.shopping.length} 筆、QR ${incoming.qrItems.length} 筆`;
+        const time=parsed.exportedAt?new Date(parsed.exportedAt).toLocaleString('zh-TW'):'未提供';
+        alert('即將匯入：'+time+'\n'+count+'\n請先保存目前資料的安全備份。');exportTripJSON();
+        if(!confirm('請確認剛剛的 JSON 備份已下載並保存在「檔案」中。\n確定用匯入資料覆蓋目前全部內容（含 QR）嗎？'))return;
+        const before=localStorage.getItem(TRIP_KEY),old=storeData;
+        try {
+          if(before!==null)localStorage.setItem(TRIP_KEY+'_pre_import_recovery',before);
+          const json=JSON.stringify(incoming);localStorage.setItem(TRIP_KEY,json);
+          if(localStorage.getItem(TRIP_KEY)!==json)throw Error('寫入驗證失敗');
+          storeData=incoming;switchDay(currentDay);renderAccounting();renderPacking();renderShopping();renderQrList();searchTrip();alert('匯入成功！已包含 QR 區資料。');
+        }catch(e){storeData=old;try{if(before===null)localStorage.removeItem(TRIP_KEY);else localStorage.setItem(TRIP_KEY,before);}catch(_){}throw e;}
+      }catch(e){alert('匯入失敗：'+e.message);}finally{input.value='';}
+    }
+    function restorePreImport(){
+      try {
+        const raw=localStorage.getItem(TRIP_KEY+'_pre_import_recovery');if(!raw)return alert('沒有找到回復點');
+        const data=JSON.parse(raw);if(!validTripStore(data))throw Error('回復點資料格式錯誤');
+        if(!confirm('將回復上次匯入前資料。請先備份目前內容。確定繼續？'))return;
+        const old=localStorage.getItem(TRIP_KEY);localStorage.setItem(TRIP_KEY,raw);if(localStorage.getItem(TRIP_KEY)!==raw)throw Error('驗證失敗');
+        storeData={...data,qrItems:Array.isArray(data.qrItems)?data.qrItems:[]};switchDay(currentDay);renderAccounting();renderPacking();renderShopping();renderQrList();searchTrip();alert('回復完成');
+      }catch(e){alert('回復失敗：'+e.message);}
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      initData();
+      updateBackupTime();
+      switchDay(1);
+      renderAccounting();
+      renderPacking();
+      renderShopping();
+      renderQrList();
+    });
+  </script>
+
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js"></script>
+  <script>
+  // Firebase 公開 Web 設定；存取安全性由資料庫規則中的兩個 UID 決定。
+  const cloudConfig = {
+    apiKey: 'AIzaSyASUQZmwVyE-zk-9ruDllPSo0fherWtXpo',
+    authDomain: 'japan-trip-72509.firebaseapp.com',
+    databaseURL: 'https://japan-trip-72509-default-rtdb.asia-southeast1.firebasedatabase.app',
+    projectId: 'japan-trip-72509',
+    storageBucket: 'japan-trip-72509.firebasestorage.app',
+    messagingSenderId: '123582566292',
+    appId: '1:123582566292:web:bcc135387964beee4d4981'
+  };
+  let cloudDb=null, cloudRef=null, cloudReady=false, cloudApplying=false, cloudPrevious=null;
+  const cloudKeys=['userEvents','accounting','packing','shopping','qrItems'];
+  let cloudImagePrevious={}, cloudImageListening=false;
+  function cloudStatus(msg, error=false){ const e=document.getElementById('cloud-status');if(e){e.textContent=msg;e.className='text-xs font-bold '+(error?'text-red-600':'text-themeGreen');} }
+  function cloudClean(key, value){
+    // 不上傳照片、QR 圖片及個人票券影像；保留文字欄位。
+    return JSON.parse(JSON.stringify(value ?? (key==='userEvents'?{}:[]), (k,v)=> (k==='img'||k==='image'||k==='imageData'||k==='photo'||k==='qrData') ? undefined : v));
+  }
+  function cloudSnapshot(){const r={};for(const k of cloudKeys)r[k]=cloudClean(k,storeData[k]);return r;}
+  function cloudPreserveImages(key,incoming){
+    const old=storeData[key];
+    if(key==='userEvents'){
+      for(const [eventKey,notes] of Object.entries(incoming||{})){
+        const oldNotes=old?.[eventKey]||[];
+        notes.forEach((n,i)=>{const match=oldNotes.find(x=>x.name===n.name && x.note===n.note)||oldNotes[i];if(match?.img && !n.img)n.img=match.img;});
+      }
+    }else if(Array.isArray(incoming)){
+      incoming.forEach((n,i)=>{const match=(old||[]).find(x=>x.id===n.id)||old?.[i];if(match?.img && !n.img)n.img=match.img;});
+    }
+    return incoming;
+  }
+  function cloudRefresh(){switchDay(currentDay);renderAccounting();renderPacking();renderShopping();renderQrList();searchTrip();}
+  async function cloudConnect(){
+    try{
+      cloudStatus('正在建立匿名身分…');
+      if(!window.firebase)throw Error('Firebase 程式庫未載入，請確認網路連線');
+      if(!firebase.apps.length)firebase.initializeApp(cloudConfig);
+      const result=await firebase.auth().signInAnonymously();
+      const uid=result.user.uid;
+      document.getElementById('cloud-uid').textContent=uid;
+      document.getElementById('cloud-actions').classList.remove('hidden');
+      cloudDb=firebase.database();cloudRef=cloudDb.ref('trips/japan2026');
+      cloudStatus('匿名 UID 已取得。請先將兩支裝置 UID 加入 Firebase 安全規則。');
+    }catch(e){cloudStatus('連接失敗：'+e.message,true);}
+  }
+  function cloudCopyUid(){const uid=document.getElementById('cloud-uid').textContent;if(uid==='尚未取得')return alert('請先連接雲端');navigator.clipboard?.writeText(uid).then(()=>alert('UID 已複製')).catch(()=>prompt('請長按複製 UID：',uid));}
+  async function cloudInitialUpload(){
+    if(!cloudRef)return alert('請先連接雲端');
+    if(!confirm('確認已下載 JSON 備份？僅在雲端完全空白時上傳文字資料，照片與 QR 將分別上傳，過大的圖片會跳過並提示。'))return;
+    try{
+      cloudStatus('正在確認雲端是否為空…');
+      const snapshot=cloudSnapshot();
+      const result=await cloudRef.transaction(old=>old===null?{...snapshot,createdAt:firebase.database.ServerValue.TIMESTAMP}:undefined,undefined,false);
+      if(!result.committed)return cloudStatus('雲端已有資料，沒有覆蓋。請選「下載雲端資料」。',true);
+      cloudStatus('首次上傳成功。接著按「下載雲端資料並啟用即時同步」。');
+    }catch(e){cloudStatus('首次上傳失敗：'+e.message,true);}
+  }
+  async function cloudStartDownload(){
+    if(!cloudRef)return alert('請先連接雲端');
+    if(cloudReady)return cloudStatus('即時同步已啟用');
+    if(!confirm('請先匯出 JSON 備份。下載雲端資料會取代本機同類清單；雲端圖片會載入。確定繼續？'))return;
+    try{
+      const snap=await cloudRef.once('value');
+      if(!snap.exists())return cloudStatus('雲端目前是空的，請先由其中一支裝置執行首次上傳。',true);
+      cloudApplying=true;
+      const remote=snap.val();
+      for(const key of cloudKeys){if(remote[key]!==undefined)storeData[key]=cloudPreserveImages(key,key==='userEvents'?remote[key]:(Array.isArray(remote[key])?remote[key]:Object.values(remote[key])));}
+      cloudPrevious=cloudSnapshot();
+      localStorage.setItem(TRIP_KEY,JSON.stringify(storeData));
+      cloudRefresh();cloudApplying=false;
+      cloudReady=true;
+      await cloudStartImages();
+      // 依清單／行程備註分支監聽，避免一筆記帳覆蓋其他類別。
+      for(const key of cloudKeys){
+        cloudRef.child(key).on('value',s=>{
+          if(!cloudReady||cloudApplying)return;
+          const incoming=s.val();if(incoming===null)return;
+          const normalized=key==='userEvents'?incoming:(Array.isArray(incoming)?incoming:Object.values(incoming));
+          const now=JSON.stringify(cloudClean(key,normalized));
+          if(now===JSON.stringify(cloudPrevious[key]))return;
+          cloudApplying=true;
+          storeData[key]=cloudPreserveImages(key,normalized);
+          cloudPrevious[key]=cloudClean(key,normalized);
+          try{localStorage.setItem(TRIP_KEY,JSON.stringify(storeData));cloudRefresh();cloudStatus('已接收雲端更新 ✓');}catch(e){cloudStatus('本機儲存失敗：'+e.message,true);}
+          cloudApplying=false;
+        },e=>cloudStatus('同步讀取失敗：'+e.message,true));
+      }
+      cloudStatus('即時同步已啟用 ✓（文字與小型圖片）');
+    }catch(e){cloudApplying=false;cloudStatus('下載失敗：'+e.message,true);}
+  }
+  window.cloudOnLocalSave=function(){
+    if(!cloudReady||cloudApplying||!cloudRef)return;
+    const next=cloudSnapshot();
+    for(const key of cloudKeys){
+      if(JSON.stringify(next[key])===JSON.stringify(cloudPrevious[key]))continue;
+      const value=next[key];cloudPrevious[key]=value;
+      cloudRef.child(key).set(value).then(()=>cloudStatus('文字資料已同步 ✓')).catch(e=>cloudStatus('雲端寫入失敗（本機已儲存）：'+e.message,true));
+    }
+  };
+
+  // 圖片獨立存放於 Realtime Database，避免每次文字修改重傳圖片。
+  // QR 採 PNG 無損縮圖；一般照片採 JPEG。所有圖片均須先經兩個 UID 規則授權。
+  function cloudImageEntries(){
+    const out={};
+    const add=(kind,id,img)=>{if(typeof img==='string' && img.startsWith('data:image/'))out[kind+'__'+String(id).replace(/[^a-zA-Z0-9_-]/g,'_')]=img;};
+    for(const x of storeData.qrItems||[])add('qr',x.id,x.img);
+    for(const x of storeData.accounting||[])add('acc',x.id,x.img);
+    for(const x of storeData.shopping||[])add('shop',x.id,x.img);
+    for(const [key,notes] of Object.entries(storeData.userEvents||{}))
+      (notes||[]).forEach((n,i)=>add('note',key+'_'+i,n.img));
+    return out;
+  }
+  function cloudSetImage(key,img){
+    const [kind,...parts]=key.split('__'); const id=parts.join('__');
+    const apply=(arr)=>{const x=(arr||[]).find(v=>String(v.id)===id);if(x && x.img!==img){x.img=img;return true;}return false;};
+    if(kind==='qr')return apply(storeData.qrItems);
+    if(kind==='acc')return apply(storeData.accounting);
+    if(kind==='shop')return apply(storeData.shopping);
+    if(kind==='note'){
+      const m=id.match(/^(.*)_(\d+)$/);if(!m)return false;
+      const x=storeData.userEvents?.[m[1]]?.[Number(m[2])];
+      if(x&&x.img!==img){x.img=img;return true;}
+    }
+    return false;
+  }
+  async function cloudShrinkImage(data,qr){
+    if(data.length<=350000)return data;
+    const image=await new Promise((ok,fail)=>{const i=new Image();i.onload=()=>ok(i);i.onerror=fail;i.src=data;});
+    let limit=qr?1100:1000;
+    for(let tries=0;tries<5;tries++,limit=Math.floor(limit*.8)){
+      const scale=Math.min(1,limit/Math.max(image.width,image.height));
+      const c=document.createElement('canvas');c.width=Math.max(1,Math.round(image.width*scale));c.height=Math.max(1,Math.round(image.height*scale));
+      c.getContext('2d').drawImage(image,0,0,c.width,c.height);
+      const next=c.toDataURL(qr?'image/png':'image/jpeg',qr?undefined:.72);
+      if(next.length<=350000)return next;
+    }
+    throw Error('圖片壓縮後仍超過限制，請先裁切圖片或減少背景內容');
+  }
+  async function cloudSyncImages(){
+    if(!cloudReady||!cloudRef||cloudApplying)return;
+    const images=cloudImageEntries();
+    for(const [key,img] of Object.entries(images)){
+      if(cloudImagePrevious[key]===img)continue;
+      try{
+        const compressed=await cloudShrinkImage(img,key.startsWith('qr__'));
+        await cloudRef.child('images').child(key).set(compressed);
+        cloudImagePrevious[key]=img;
+        cloudStatus('圖片已同步 ✓');
+      }catch(e){cloudStatus('圖片 '+key+' 同步失敗：'+e.message,true);}
+    }
+    // 圖片刪除時清除雲端；只處理本裝置先前確定存在的圖片。
+    for(const key of Object.keys(cloudImagePrevious))if(!(key in images)){
+      try{await cloudRef.child('images').child(key).remove();delete cloudImagePrevious[key];}catch(e){cloudStatus('刪除圖片失敗：'+e.message,true);}
+    }
+  }
+  async function cloudStartImages(){
+    if(cloudImageListening)return;
+    cloudImageListening=true;
+    cloudRef.child('images').on('child_added',s=>{
+      const img=s.val();if(typeof img!=='string'||!img.startsWith('data:image/'))return;
+      if(cloudSetImage(s.key,img)){
+        try{localStorage.setItem(TRIP_KEY,JSON.stringify(storeData));cloudRefresh();}catch(e){cloudStatus('圖片已下載，但本機儲存空間不足，請匯出備份',true);}
+      }
+      cloudImagePrevious[s.key]=img;
+    },e=>cloudStatus('圖片讀取失敗：'+e.message,true));
+    cloudRef.child('images').on('child_changed',s=>{
+      const img=s.val();if(typeof img!=='string'||!img.startsWith('data:image/'))return;
+      if(cloudSetImage(s.key,img)){
+        try{localStorage.setItem(TRIP_KEY,JSON.stringify(storeData));cloudRefresh();}catch(e){cloudStatus('圖片已下載，但本機儲存空間不足',true);}
+      }
+      cloudImagePrevious[s.key]=img;
+    });
+    cloudRef.child('images').on('child_removed',s=>{
+      delete cloudImagePrevious[s.key];
+      if(cloudSetImage(s.key,'')){try{localStorage.setItem(TRIP_KEY,JSON.stringify(storeData));cloudRefresh();}catch(e){}}
+    });
+    // 初始化時先將現有圖片上傳；同名遠端圖片不覆蓋，避免舊裝置改寫雲端。
+    const remote=(await cloudRef.child('images').once('value')).val()||{};
+    const local=cloudImageEntries();
+    for(const [key,img] of Object.entries(local)){
+      if(remote[key])continue;
+      try{const compressed=await cloudShrinkImage(img,key.startsWith('qr__'));
+        const result=await cloudRef.child('images').child(key).transaction(v=>v===null?compressed:undefined,undefined,false);
+        if(result.committed)cloudImagePrevious[key]=img;
+      }catch(e){cloudStatus('圖片首次上傳失敗：'+e.message,true);}
+    }
+  }
+  const cloudOriginalSave=window.cloudOnLocalSave;
+  window.cloudOnLocalSave=function(){cloudOriginalSave();cloudSyncImages();};
+
+  </script>
+</body>
+</html>
