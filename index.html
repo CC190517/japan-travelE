@@ -1269,14 +1269,43 @@
     // 保留雲端既有順序，新增本機項目接在後面。
     return [...r.values()];
   }
+  // userEvents 採逐筆差異合併：同一行程連續新增不同備忘，不視為衝突。
+  // 以完整文字內容及出現次數比較，保留同名備忘；遠端與本機新增皆保留。
+  // 真正的同筆雙方修改也保留兩個版本，避免自動覆蓋使用者資料。
+  function cloudMergeNotes(base,local,remote){
+    const signature=x=>JSON.stringify(x);
+    const counts=items=>{const m=new Map();for(const x of items)m.set(signature(x),(m.get(signature(x))||0)+1);return m;};
+    const bc=counts(base),lc=counts(local),rc=counts(remote);
+    const out=remote.slice();
+    // 只移除「本機已刪除、而雲端仍是原版本」的項目；另一裝置有改動則保留。
+    for(const [sig,bn] of bc){
+      const removed=Math.max(0,bn-(lc.get(sig)||0));
+      const stillOriginal=Math.min(bn,rc.get(sig)||0);
+      let toRemove=Math.min(removed,stillOriginal);
+      for(let i=out.length-1;i>=0&&toRemove>0;i--){
+        if(signature(out[i])===sig){out.splice(i,1);toRemove--;}
+      }
+    }
+    // 本機相對於基準新增的項目：若雲端已有相同新增則不重複加入。
+    const oc=counts(out);
+    for(const [sig,ln] of lc){
+      const added=Math.max(0,ln-(bc.get(sig)||0));
+      const remoteAdded=Math.max(0,(rc.get(sig)||0)-(bc.get(sig)||0));
+      let missing=Math.max(0,added-remoteAdded);
+      for(const x of local){
+        if(missing<=0)break;
+        if(signature(x)===sig){out.push(x);missing--;}
+      }
+    }
+    return out;
+  }
   function cloudThreeWay(key,base,local,remote){
     if(cloudEq(local,base))return remote;
     if(cloudEq(remote,base)||cloudEq(remote,local))return local;
     if(key!=='userEvents')return cloudMergeList(base,local,remote,key);
     const out={...remote};
     for(const eventKey of new Set([...Object.keys(base),...Object.keys(local)])){
-      const merged=cloudMergeList(base[eventKey]||[],local[eventKey]||[],remote[eventKey]||[],'userEvents');
-      if(merged===null)return null;
+      const merged=cloudMergeNotes(base[eventKey]||[],local[eventKey]||[],remote[eventKey]||[]);
       if(merged.length)out[eventKey]=merged;else delete out[eventKey];
     }
     return out;
@@ -1318,7 +1347,7 @@
             const remote=cloudClean(key,cloudNormalize(key,raw));
             // Firebase 第一次可能以 null 快取呼叫 updater；用剛取得的
             // server snapshot 作初始候選，伺服器版本不同會重新執行 updater。
-            const candidate=(raw===null&&!cloudEq(server,cloudNormalize(key,null)))?server:remote;
+            const candidate=(raw===null&&!cloudEq(server,cloudClean(key,cloudNormalize(key,null))))?server:remote;
             const merged=cloudThreeWay(key,base,local,candidate);
             if(merged===null){conflict=true;return;}
             return key!=='userEvents'&&merged.length===0?null:merged;
