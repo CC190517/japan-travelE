@@ -1077,6 +1077,14 @@
   let cloudDb=null, cloudRef=null, cloudReady=false, cloudApplying=false, cloudPrevious=null;
   const cloudWriting=new Set(), cloudBlocked=new Set();
   const cloudQueued=new Set();
+  const cloudDebounceTimers=new Map();
+  const cloudRetryCounts=new Map();
+  function cloudScheduleFlush(key,delay=850){
+    if(!cloudReady||cloudBlocked.has(key))return;
+    clearTimeout(cloudDebounceTimers.get(key));
+    cloudDebounceTimers.set(key,setTimeout(()=>{cloudDebounceTimers.delete(key);cloudFlushKey(key);},delay));
+    cloudSetBadge(true);
+  }
   // 自動恢復僅限本裝置曾成功啟用同步；不同步的本機修改不會被自動覆蓋。
   const CLOUD_AUTO_KEY=TRIP_KEY+'_cloud_auto_v1';
   const CLOUD_BASE_KEY=TRIP_KEY+'_cloud_last_synced_v1';
@@ -1222,7 +1230,7 @@
           if(cloudWriting.has(key))return;
           if(JSON.stringify(cloudClean(key,storeData[key]))!==JSON.stringify(cloudPrevious[key])){
             // 連續新增時，本機尚未送完屬正常情況；由佇列三方合併處理。
-            cloudFlushKey(key);
+            cloudScheduleFlush(key,200);
             return;
           }
           cloudApplying=true;
@@ -1306,9 +1314,16 @@
           return key!=='userEvents' && next.length===0 ? null : next;
         },undefined,false);
         if(!result.committed){
-          // transaction 中止不代表資料被刪除；停止而不是無限重試。
-          cloudConflict(key,unsafe?'雲端同項目版本衝突':'交易未提交，請檢查網路或權限');break;
+          if(unsafe){cloudConflict(key,'雲端同項目版本衝突');break;}
+          // 暫時性的 Firebase transaction 中止不應將整個裝置永久切回本機。
+          const attempts=(cloudRetryCounts.get(key)||0)+1;
+          cloudRetryCounts.set(key,attempts);
+          if(attempts>5){cloudConflict(key,'連續交易未提交，請檢查網路或權限');break;}
+          cloudStatus('雲端交易重試中（'+attempts+'/5）…');
+          await new Promise(resolve=>setTimeout(resolve,300*attempts));
+          continue;
         }
+        cloudRetryCounts.delete(key);
         const committed=cloudClean(key,cloudNormalize(key,result.snapshot.val()));
         cloudPrevious[key]=committed;
         // 合併遠端新增項目，但不蓋掉寫入途中剛新增的本機項目。
@@ -1326,7 +1341,7 @@
       cloudQueued.delete(key);
       if(cloudReady&&!cloudBlocked.has(key)&&!cloudEq(cloudClean(key,storeData[key]),cloudPrevious[key])){
         // 讓下一輪在前一輪完全結束後開始，確保同類別只有一個寫入者。
-        Promise.resolve().then(()=>cloudFlushKey(key));
+        cloudScheduleFlush(key,250);
       }
       cloudSetBadge(cloudReady);
     }
@@ -1336,7 +1351,7 @@
     for(const key of cloudKeys){
       if(cloudEq(cloudClean(key,storeData[key]),cloudPrevious[key]))continue;
       if(cloudWriting.has(key)){cloudQueued.add(key);continue;}
-      cloudFlushKey(key);
+      cloudScheduleFlush(key);
     }
   };
 
