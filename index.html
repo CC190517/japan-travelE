@@ -1337,65 +1337,73 @@
   }
   function cloudConflict(key,detail){cloudDiagnostic(key,detail,true);}
   function cloudWait(ms){return new Promise(resolve=>setTimeout(resolve,ms));}
-  // v5: single-flight per category. One confirmed transaction per queued change.
-  // Never mark cloud data confirmed until the server acknowledges the transaction.
+  // v6: bounded single-flight writer. Each run captures a local snapshot, commits
+  // once, and only then advances the acknowledged baseline. New edits are queued.
+  const cloudPendingTimers=new Map();
+  function cloudQueueWrite(key,delay=500){
+    if(!cloudReady||cloudBlocked.has(key))return;
+    clearTimeout(cloudPendingTimers.get(key));
+    cloudPendingTimers.set(key,setTimeout(()=>{
+      cloudPendingTimers.delete(key);
+      void cloudFlushKey(key);
+    },delay));
+    cloudSetBadge(true);
+  }
   async function cloudFlushKey(key){
     if(!cloudReady||!cloudRef||cloudWriting.has(key)||cloudBlocked.has(key))return;
-    clearTimeout(cloudDebounceTimers.get(key));
-    cloudDebounceTimers.delete(key);
     cloudWriting.add(key);
     cloudSetBadge(true);
+    let successful=false;
     try{
       const base=cloudClean(key,cloudPrevious[key]);
-      const local=cloudClean(key,storeData[key]);
-      if(cloudEq(base,local))return;
+      const sending=cloudClean(key,storeData[key]);
+      if(cloudEq(base,sending)){successful=true;return;}
       const ref=cloudRef.child(key);
-      // Explicit read is used only for the initial transaction's null cache value.
-      const server=cloudClean(key,cloudNormalize(key,(await ref.once('value')).val()));
-      let mergeError=false;
-      let sawRealValue=false;
+      // Read authoritative server state first. The transaction updater may run
+      // repeatedly, including with a null cache value before server hydration.
+      const remoteSnap=await ref.once('value');
+      const remote=cloudClean(key,cloudNormalize(key,remoteSnap.val()));
+      const candidate=cloudThreeWay(key,base,sending,remote);
+      if(candidate===null){cloudConflict(key,'雲端與本機同一項目有衝突；未覆蓋本機資料');return;}
+      let conflict=false;
+      let first=true;
       const result=await ref.transaction(raw=>{
-        const empty=cloudClean(key,cloudNormalize(key,null));
-        // RTDB compat can call updater first with an empty local cache. It will
-        // re-run against server data if the server value differs.
-        const candidate=(raw===null&&!sawRealValue&&!cloudEq(server,empty))
-          ? server : cloudClean(key,cloudNormalize(key,raw));
-        if(raw!==null)sawRealValue=true;
-        const next=cloudThreeWay(key,base,local,candidate);
-        if(next===null){mergeError=true;return;}
-        return key!=='userEvents'&&Array.isArray(next)&&next.length===0?null:next;
+        // First local-cache invocation can be null even if server is populated.
+        // Firebase retries against the actual server version before committing.
+        const serverValue=(first&&raw===null&&!cloudEq(remote,cloudClean(key,cloudNormalize(key,null))))
+          ?remote:cloudClean(key,cloudNormalize(key,raw));
+        first=false;
+        const merged=cloudThreeWay(key,base,sending,serverValue);
+        if(merged===null){conflict=true;return;}
+        return key!=='userEvents'&&Array.isArray(merged)&&merged.length===0?null:merged;
       },undefined,false);
       if(!result.committed){
-        cloudConflict(key,mergeError?'同一項目在兩台裝置被修改；本機資料保留':'Firebase 未確認交易；本機資料保留');
+        cloudConflict(key,conflict?'伺服器版本衝突，已保留本機修改':'伺服器未確認寫入，已保留本機修改');
         return;
       }
       const confirmed=cloudClean(key,cloudNormalize(key,result.snapshot.val()));
-      // Reconcile edits made while the network request was in flight.
+      // A new edit during await is a delta relative to the sent snapshot.
       const current=cloudClean(key,storeData[key]);
-      const reconciled=cloudThreeWay(key,local,current,confirmed);
+      const reconciled=cloudThreeWay(key,sending,current,confirmed);
       cloudPrevious[key]=confirmed;
+      cloudSaveBaseline();
       if(reconciled===null){
-        // Do not overwrite the edits made during upload.
-        cloudSaveBaseline();
-        cloudConflict(key,'上傳期間同一項目有新修改；本機資料保留');
-        return;
+        cloudConflict(key,'上傳期間修改了同一項目，已保留本機資料');return;
       }
       storeData[key]=cloudPreserveImages(key,reconciled);
       localStorage.setItem(TRIP_KEY,JSON.stringify(storeData));
-      cloudSaveBaseline();
-      cloudFaults.delete(key);
       cloudRefresh();
-      cloudStatus('伺服器已確認文字資料 ✓');
-    }catch(e){
-      cloudConflict(key,'上傳未完成：'+(e?.message||String(e))+'；本機資料保留');
-    }finally{
+      cloudFaults.delete(key);
+      successful=true;
+      cloudStatus('Firebase 已確認寫入 ✓');
+    }catch(e){cloudConflict(key,'寫入失敗：'+(e?.message||String(e)));}
+    finally{
       cloudWriting.delete(key);
       cloudQueued.delete(key);
-      // Only one follow-up is scheduled, after the previous transaction has
-      // completed. This prevents recursive microtask flush loops.
-      if(cloudReady&&!cloudBlocked.has(key)&&
+      // Never spin in a microtask loop. Schedule only after a confirmed commit.
+      if(successful&&cloudReady&&!cloudBlocked.has(key)&&
          !cloudEq(cloudClean(key,storeData[key]),cloudPrevious[key])){
-        cloudScheduleFlush(key,700);
+        cloudQueueWrite(key,700);
       }
       cloudSetBadge(cloudReady);
     }
@@ -1405,7 +1413,7 @@
     for(const key of cloudKeys){
       if(cloudEq(cloudClean(key,storeData[key]),cloudPrevious[key]))continue;
       if(cloudWriting.has(key)){cloudQueued.add(key);continue;}
-      cloudScheduleFlush(key,450);
+      cloudQueueWrite(key,500);
     }
   };
 
