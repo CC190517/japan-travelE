@@ -1292,10 +1292,16 @@
         // Firebase transaction 可能重試；每次以最新 remote 重算合併，不以舊快照覆蓋。
         let unsafe=false;
         const result=await cloudRef.child(key).transaction(raw=>{
+          unsafe=false;
           const remote=cloudClean(key,cloudNormalize(key,raw));
-          // 本機尚未收到資料庫快取時，不可假定空資料就是伺服器狀態。
-          if(raw===null && !cloudEq(latest,cloudNormalize(key,null)))return; 
-          const next=cloudThreeWay(key,base,local,remote);
+          // Firebase transaction 首次回呼可能取得 null（本機快取尚未建立），
+          // 即使先前 once('value') 已取得非空伺服器資料。不能在這裡 return undefined，
+          // 否則 transaction 會被視為未提交，並把整個清單永久標為衝突。
+          // 首次空快取先使用已讀取的伺服器快照；若伺服器版本變更，Firebase
+          // 會重新呼叫 transaction updater，再用新的 raw 做三方合併。
+          const effectiveRemote=(raw===null && !cloudEq(latest,cloudNormalize(key,null)))
+            ? cloudClean(key,latest) : remote;
+          const next=cloudThreeWay(key,base,local,effectiveRemote);
           if(next===null){unsafe=true;return;}
           return key!=='userEvents' && next.length===0 ? null : next;
         },undefined,false);
