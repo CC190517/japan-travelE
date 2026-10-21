@@ -1106,8 +1106,19 @@
   let cloudImagePrevious={}, cloudImageListening=false;
   function cloudStatus(msg, error=false){ const e=document.getElementById('cloud-status');if(e){e.textContent=msg;e.className='text-xs font-bold '+(error?'text-red-600':'text-themeGreen');} }
   function cloudClean(key, value){
-    // 不上傳照片、QR 圖片及個人票券影像；保留文字欄位。
-    return JSON.parse(JSON.stringify(value ?? (key==='userEvents'?{}:[]), (k,v)=> (k==='img'||k==='image'||k==='imageData'||k==='photo'||k==='qrData') ? undefined : v));
+    // Firebase 不儲存空陣列，且可能把陣列讀回為數字鍵物件。
+    // 統一格式避免「已成功上傳」後仍無限重傳。
+    const raw=JSON.parse(JSON.stringify(value ?? (key==='userEvents'?{}:[]),
+      (k,v)=>(k==='img'||k==='image'||k==='imageData'||k==='photo'||k==='qrData')?undefined:v));
+    if(key!=='userEvents')return raw;
+    const result={};
+    if(!raw||typeof raw!=='object'||Array.isArray(raw))return result;
+    for(const k of Object.keys(raw).sort()){
+      const v=raw[k];
+      const notes=Array.isArray(v)?v:(v&&typeof v==='object'?Object.keys(v).sort((a,b)=>Number(a)-Number(b)).map(n=>v[n]):[]);
+      if(notes.length)result[k]=notes;
+    }
+    return result;
   }
   function cloudSnapshot(){const r={};for(const k of cloudKeys)r[k]=cloudClean(k,storeData[k]);return r;}
   function cloudPreserveImages(key,incoming){
@@ -1253,7 +1264,10 @@
     if(key==='userEvents')return raw&&typeof raw==='object'?raw:{};
     return raw==null?[]:(Array.isArray(raw)?raw:Object.values(raw));
   }
-  const cloudEq=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
+  // 物件鍵順序不是資料差異；Firebase 讀回時順序可能不同。
+  const cloudStable=v=>JSON.stringify(v,(k,x)=>x&&typeof x==='object'&&!Array.isArray(x)
+    ?Object.fromEntries(Object.keys(x).sort().map(key=>[key,x[key]])):x);
+  const cloudEq=(a,b)=>cloudStable(a)===cloudStable(b);
   function cloudMergeList(base,local,remote,key){
     const identify=x=>key==='userEvents' ? JSON.stringify([x.name,x.note]) : String(x.id);
     const b=new Map(base.map(x=>[identify(x),x]));
@@ -1328,9 +1342,13 @@
     clearTimeout(cloudDebounceTimers.get(key));
     cloudDebounceTimers.delete(key);
     cloudWriting.add(key);cloudSetBadge(true);
-    let retry=0;
+    let retry=0, rounds=0;
     try{
       while(cloudReady&&!cloudBlocked.has(key)){
+        if(++rounds>8){
+          cloudDiagnostic(key,'連續同步超過 8 輪，已停止重試以避免無限循環；本機資料保留',true);
+          break;
+        }
         // 必須在每一輪開始時重新取得本機資料，不能使用上一筆的舊快照。
         const base=cloudClean(key,cloudPrevious[key]);
         const local=cloudClean(key,storeData[key]);
