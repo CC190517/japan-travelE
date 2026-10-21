@@ -241,6 +241,12 @@
           <form onsubmit="handleAddShopping(event)" class="space-y-2.5 text-xs">
             <input type="text" id="shop-title" placeholder="商品名稱 (例如: T1 聯名外套)" required class="w-full border border-themeBorder rounded-xl p-2.5 focus:outline-none focus:border-themeGreen">
             <div class="grid grid-cols-2 gap-2">
+              <label class="text-xs font-bold text-themeText flex flex-col gap-1">購買清單
+                <select id="shop-owner" class="border border-themeBorder rounded-xl p-2.5 bg-white"><option value="J">J購買清單</option><option value="L">L購買清單</option></select>
+              </label>
+              <div class="text-xs text-themeMuted flex items-center">舊商品預設歸在 J 清單；可編輯移至 L。</div>
+            </div>
+            <div class="grid grid-cols-2 gap-2">
               <select id="shop-cat" class="border border-themeBorder rounded-xl p-2.5 bg-white focus:outline-none focus:border-themeGreen">
                 <option value="👕 服飾配件">👕 服飾配件</option>
                 <option value="💄 藥妝美妝">💄 藥妝美妝</option>
@@ -902,13 +908,14 @@
       e.preventDefault();
       const title = document.getElementById('shop-title').value.trim();
       const cat = document.getElementById('shop-cat').value;
+      const owner = document.getElementById('shop-owner').value;
       const url = document.getElementById('shop-url').value.trim();
       const note = document.getElementById('shop-note').value.trim();
       const img = tempUploadImages['shop-img-data'] || "";
 
       const price = Math.max(0, Number(document.getElementById('shop-price').value) || 0);
       const qty = Math.max(1, Math.floor(Number(document.getElementById('shop-qty').value) || 1));
-      storeData.shopping.push({ id: Date.now(), title, cat, url, note, img, checked: false, price, qty });
+      storeData.shopping.push({ id: Date.now(), title, cat, owner, url, note, img, checked: false, price, qty });
       delete tempUploadImages['shop-img-data'];
 
       saveData();
@@ -919,9 +926,11 @@
       document.getElementById('shop-qty').value = '1';
     }
 
+    // J / L 分組：既有商品沒有 owner 欄位時視為 J，保留原資料與同步 ID。
+    function shoppingOwner(item){ return item.owner==='L'?'L':'J'; }
     function renderShopping() {
       const listEl = document.getElementById('shopping-items-list');
-      listEl.innerHTML = storeData.shopping.map(item => `
+      const card = item => `
         <div class="bg-white rounded-2xl p-4 border border-themeBorder space-y-2 text-xs">
           <div class="flex items-start justify-between">
             <label class="flex items-center gap-2 cursor-pointer font-bold text-sm">
@@ -939,8 +948,18 @@
             <button onclick="deleteShopping(${item.id})" class="text-gray-400 hover:text-red-500"><i class="fa-solid fa-trash-can"></i></button>
           </div>
         </div>
-      `).join('');
-      document.getElementById('shopping-budget').textContent = '未購買預估總額：¥ ' + storeData.shopping.filter(x=>!x.checked).reduce((a,x)=>a+(Number(x.price)||0)*(Number(x.qty)||1),0).toLocaleString();
+      `;
+      listEl.innerHTML = ['J','L'].map(owner=>{
+        const items=storeData.shopping.filter(x=>shoppingOwner(x)===owner);
+        const pending=items.filter(x=>!x.checked).reduce((a,x)=>a+(Number(x.price)||0)*(Number(x.qty)||1),0);
+        const purchased=items.filter(x=>x.checked).length;
+        return `<section class="bg-themeHeader border border-themeBorder rounded-2xl p-3 space-y-3">
+          <div class="flex items-center justify-between gap-2"><h3 class="text-sm font-extrabold text-themeGreen">${owner}購買清單</h3><span class="text-xs text-themeMuted">${purchased}/${items.length} 已購買</span></div>
+          <p class="text-xs font-bold text-themeGreen">未購買預估：¥ ${pending.toLocaleString()}</p>
+          ${items.length?items.map(card).join(''):'<p class="text-xs text-themeMuted bg-white rounded-xl p-3">目前沒有商品</p>'}
+        </section>`;
+      }).join('');
+      document.getElementById('shopping-budget').textContent = 'J / L 未購買預估總額：¥ ' + storeData.shopping.filter(x=>!x.checked).reduce((a,x)=>a+(Number(x.price)||0)*(Number(x.qty)||1),0).toLocaleString();
     }
 
     function editShopping(id) {
@@ -949,8 +968,10 @@
       const price=prompt('日幣單價',item.price||0); if(price===null)return;
       const qty=prompt('數量',item.qty||1); if(qty===null)return;
       const note=prompt('備註',item.note||''); if(note===null)return;
+      const owner=prompt('購買清單：請輸入 J 或 L',shoppingOwner(item)); if(owner===null)return;
+      if(!['J','L'].includes(owner.trim().toUpperCase()))return alert('購買清單請輸入 J 或 L');
       if(!Number.isFinite(Number(price))||Number(price)<0||!Number.isInteger(Number(qty))||Number(qty)<1)return alert('價格或數量不正確');
-      Object.assign(item,{title:title.trim(),price:Number(price),qty:Number(qty),note}); saveData();renderShopping();
+      Object.assign(item,{title:title.trim(),price:Number(price),qty:Number(qty),note,owner:owner.trim().toUpperCase()}); saveData();renderShopping();
     }
 
     function toggleShopping(id) {
@@ -1062,7 +1083,9 @@
   window.cloudSetBadge=cloudSetBadge;
   function cloudSetBadge(active){
     const badge=document.getElementById('save-status-badge');if(!badge)return;
-    badge.innerHTML=active?'<i class="fa-solid fa-cloud text-green-600"></i> 雲端同步':'<i class="fa-solid fa-mobile-screen text-themeGreen"></i> 本機儲存';
+    const healthy=active && cloudBlocked.size===0;
+    const pending=healthy && (cloudWriting.size>0 || cloudQueued.size>0);
+    badge.innerHTML=healthy?(pending?'<i class="fa-solid fa-cloud-arrow-up text-amber-600"></i> 同步中':'<i class="fa-solid fa-cloud text-green-600"></i> 雲端同步'):'<i class="fa-solid fa-mobile-screen text-themeGreen"></i> 本機儲存';
   }
   const cloudKeys=['userEvents','accounting','packing','shopping','qrItems'];
   let cloudImagePrevious={}, cloudImageListening=false;
@@ -1213,6 +1236,7 @@
   async function cloudFlushKey(key){
     if(!cloudReady||!cloudRef||cloudWriting.has(key)||cloudBlocked.has(key))return;
     cloudWriting.add(key);
+    cloudSetBadge(true);
     try{
       while(cloudReady){
         const value=cloudClean(key,storeData[key]);
@@ -1225,6 +1249,7 @@
         },undefined,false);
         if(!result.committed){
           cloudBlocked.add(key);
+          cloudSetBadge(false);
           cloudStatus('同步衝突：'+key+' 的雲端版本已改變。本機修改已保留，請先備份，不要下載或合併。',true);
           break;
         }
@@ -1234,11 +1259,13 @@
       }
     }catch(e){
       cloudBlocked.add(key);
+      cloudSetBadge(false);
       cloudStatus('雲端寫入失敗（本機已保留）：'+e.message+'。請先備份。',true);
     }finally{
       cloudWriting.delete(key);
       // 寫入途中若有新操作，while 已讀取最新值；若最後一刻又變更，補送一次。
       if(cloudQueued.delete(key)&&!cloudBlocked.has(key))cloudFlushKey(key);
+      cloudSetBadge(cloudReady);
     }
   }
   window.cloudOnLocalSave=function(){
@@ -1288,8 +1315,12 @@
     }
     throw Error('圖片壓縮後仍超過限制，請先裁切圖片或減少背景內容');
   }
+  let cloudImageSyncRunning=false, cloudImageSyncQueued=false;
   async function cloudSyncImages(){
     if(!cloudReady||!cloudRef||cloudApplying)return;
+    if(cloudImageSyncRunning){cloudImageSyncQueued=true;return;}
+    cloudImageSyncRunning=true;
+    try{
     const images=cloudImageEntries();
     for(const [key,img] of Object.entries(images)){
       if(cloudImagePrevious[key]===img)continue;
@@ -1303,6 +1334,10 @@
     // 圖片刪除時清除雲端；只處理本裝置先前確定存在的圖片。
     for(const key of Object.keys(cloudImagePrevious))if(!(key in images)){
       try{await cloudRef.child('images').child(key).remove();delete cloudImagePrevious[key];}catch(e){cloudStatus('刪除圖片失敗：'+e.message,true);}
+    }
+    }finally{
+      cloudImageSyncRunning=false;
+      if(cloudImageSyncQueued){cloudImageSyncQueued=false;cloudSyncImages();}
     }
   }
   async function cloudStartImages(){
