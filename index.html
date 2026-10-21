@@ -927,6 +927,8 @@
     }
 
     // J / L 分組：既有商品沒有 owner 欄位時視為 J，保留原資料與同步 ID。
+    const shoppingExpanded={J:false,L:false};
+    function toggleShoppingSection(owner){shoppingExpanded[owner]=!shoppingExpanded[owner];renderShopping();}
     function shoppingOwner(item){ return item.owner==='L'?'L':'J'; }
     function renderShopping() {
       const listEl = document.getElementById('shopping-items-list');
@@ -954,9 +956,12 @@
         const pending=items.filter(x=>!x.checked).reduce((a,x)=>a+(Number(x.price)||0)*(Number(x.qty)||1),0);
         const purchased=items.filter(x=>x.checked).length;
         return `<section class="bg-themeHeader border border-themeBorder rounded-2xl p-3 space-y-3">
-          <div class="flex items-center justify-between gap-2"><h3 class="text-sm font-extrabold text-themeGreen">${owner}購買清單</h3><span class="text-xs text-themeMuted">${purchased}/${items.length} 已購買</span></div>
+          <button type="button" onclick="toggleShoppingSection('${owner}')" aria-expanded="${shoppingExpanded[owner]}" class="w-full text-left flex items-center justify-between gap-2 rounded-xl p-1 focus:outline-none focus:ring-2 focus:ring-themeGreen">
+            <span class="flex items-center gap-2"><i class="fa-solid fa-chevron-${shoppingExpanded[owner]?'up':'down'} text-themeGreen"></i><span class="text-sm font-extrabold text-themeGreen">${owner}購買清單</span></span>
+            <span class="text-xs text-themeMuted">${purchased}/${items.length} 已購買 · ${shoppingExpanded[owner]?'收合':'展開'}</span>
+          </button>
           <p class="text-xs font-bold text-themeGreen">未購買預估：¥ ${pending.toLocaleString()}</p>
-          ${items.length?items.map(card).join(''):'<p class="text-xs text-themeMuted bg-white rounded-xl p-3">目前沒有商品</p>'}
+          ${shoppingExpanded[owner]?(items.length?items.map(card).join(''):'<p class="text-xs text-themeMuted bg-white rounded-xl p-3">目前沒有商品</p>'):''}
         </section>`;
       }).join('');
       document.getElementById('shopping-budget').textContent = 'J / L 未購買預估總額：¥ ' + storeData.shopping.filter(x=>!x.checked).reduce((a,x)=>a+(Number(x.price)||0)*(Number(x.qty)||1),0).toLocaleString();
