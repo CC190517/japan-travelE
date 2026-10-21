@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>2026日本遊</title>
+  <!-- Sync queue v3: 2026-10-21 -->
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- FontAwesome Icons -->
@@ -1076,22 +1077,11 @@
   let cloudDb=null, cloudRef=null, cloudReady=false, cloudApplying=false, cloudPrevious=null;
   const cloudWriting=new Set(), cloudBlocked=new Set();
   const cloudQueued=new Set();
-  // Firebase 可能晚送達較舊的監聽事件；保留最近成功寫入的版本供辨識。
-  const cloudRecentVersions=new Map();
-  function cloudRememberVersion(key, value){
-    const versions=cloudRecentVersions.get(key)||[];
-    const encoded=JSON.stringify(value);
-    if(!versions.includes(encoded))versions.push(encoded);
-    while(versions.length>12)versions.shift();
-    cloudRecentVersions.set(key,versions);
-  }
-  function cloudLocalDirty(key){return JSON.stringify(cloudClean(key,storeData[key]))!==JSON.stringify(cloudPrevious?.[key]);}
-  function cloudFullySynced(){return cloudReady && !cloudBlocked.size && !cloudWriting.size && !cloudQueued.size && cloudKeys.every(k=>!cloudLocalDirty(k));}
   // 自動恢復僅限本裝置曾成功啟用同步；不同步的本機修改不會被自動覆蓋。
   const CLOUD_AUTO_KEY=TRIP_KEY+'_cloud_auto_v1';
   const CLOUD_BASE_KEY=TRIP_KEY+'_cloud_last_synced_v1';
   function cloudSaveBaseline(){
-    if(!cloudPrevious || !cloudFullySynced())return;
+    if(!cloudReady || !cloudPrevious)return;
     try{localStorage.setItem(CLOUD_BASE_KEY,JSON.stringify(cloudPrevious));}
     catch(e){cloudStatus('同步正常，但無法記錄安全檢查點：'+e.message,true);}
   }
@@ -1100,7 +1090,7 @@
   function cloudSetBadge(active){
     const badge=document.getElementById('save-status-badge');if(!badge)return;
     const healthy=active && cloudBlocked.size===0;
-    const pending=healthy && (cloudWriting.size>0 || cloudQueued.size>0 || cloudKeys.some(k=>cloudLocalDirty(k)));
+    const pending=healthy && (cloudWriting.size>0 || cloudQueued.size>0 || (cloudPrevious && cloudKeys.some(k=>!cloudEq(cloudClean(k,storeData[k]),cloudPrevious[k]))));
     badge.innerHTML=healthy?(pending?'<i class="fa-solid fa-cloud-arrow-up text-amber-600"></i> 同步中':'<i class="fa-solid fa-cloud text-green-600"></i> 雲端同步'):'<i class="fa-solid fa-mobile-screen text-themeGreen"></i> 本機儲存';
   }
   const cloudKeys=['userEvents','accounting','packing','shopping','qrItems'];
@@ -1216,7 +1206,6 @@
       const remote=snap.val();
       for(const key of cloudKeys){const raw=remote[key];storeData[key]=cloudPreserveImages(key,key==='userEvents'?(raw||{}):(raw==null?[]:(Array.isArray(raw)?raw:Object.values(raw))));}
       cloudPrevious=cloudSnapshot();
-      for(const key of cloudKeys)cloudRememberVersion(key,cloudPrevious[key]);
       localStorage.setItem(TRIP_KEY,JSON.stringify(storeData));
       cloudRefresh();cloudApplying=false;
       cloudReady=true;
@@ -1229,21 +1218,16 @@
           const normalized=key==='userEvents'?(incoming||{}):(incoming==null?[]:(Array.isArray(incoming)?incoming:Object.values(incoming)));
           const now=JSON.stringify(cloudClean(key,normalized));
           if(now===JSON.stringify(cloudPrevious[key]))return;
-          // Firebase 的 value 事件可能在連續交易後延遲送達舊版本。
-          // 已知的歷史版本不是外部衝突，不能讓它阻斷後續寫入。
-          if((cloudRecentVersions.get(key)||[]).includes(now))return;
-          // 本機正在寫入時，不能用監聽事件覆蓋尚未送完的修改。
-          // 真正的版本衝突交給下方 transaction 比對處理。
-          if(cloudWriting.has(key)||cloudQueued.has(key))return;
-          if(cloudLocalDirty(key)){
-            // 本機有未送完的修改；先嘗試安全交易，不直接覆蓋。
+          // 正在送出的本機修改不得被較舊的雲端事件蓋掉。
+          if(cloudWriting.has(key))return;
+          if(JSON.stringify(cloudClean(key,storeData[key]))!==JSON.stringify(cloudPrevious[key])){
+            // 連續新增時，本機尚未送完屬正常情況；由佇列三方合併處理。
             cloudFlushKey(key);
             return;
           }
           cloudApplying=true;
           storeData[key]=cloudPreserveImages(key,normalized);
           cloudPrevious[key]=cloudClean(key,normalized);
-          cloudRememberVersion(key,cloudPrevious[key]);
           try{localStorage.setItem(TRIP_KEY,JSON.stringify(storeData));cloudSaveBaseline();cloudRefresh();cloudStatus('已接收雲端更新 ✓');}catch(e){cloudStatus('本機儲存失敗：'+e.message,true);}
           cloudApplying=false;
         },e=>cloudStatus('同步讀取失敗：'+e.message,true));
@@ -1254,66 +1238,97 @@
       cloudStatus('即時同步已啟用 ✓（重新開啟 App 將自動連線）');
     }catch(e){cloudApplying=false;cloudStatus('下載失敗：'+e.message,true);}
   }
-  // 每個清單一次只送出一個 transaction。連續操作會排隊，並以最新本機狀態重試。
+  // v3：每個清單獨立佇列；以三方差異合併，避免連續儲存的舊快照觸發假衝突。
+  // 如果另一裝置同時修改相同項目，保留本機內容並停止該清單寫入。
+  function cloudNormalize(key,raw){
+    if(key==='userEvents')return raw&&typeof raw==='object'?raw:{};
+    return raw==null?[]:(Array.isArray(raw)?raw:Object.values(raw));
+  }
+  const cloudEq=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
+  function cloudMergeList(base,local,remote,key){
+    const identify=x=>key==='userEvents' ? JSON.stringify([x.name,x.note]) : String(x.id);
+    const b=new Map(base.map(x=>[identify(x),x]));
+    const l=new Map(local.map(x=>[identify(x),x]));
+    const r=new Map(remote.map(x=>[identify(x),x]));
+    const keys=new Set([...b.keys(),...l.keys()]);
+    for(const id of keys){
+      const bv=b.get(id),lv=l.get(id),rv=r.get(id);
+      if(cloudEq(bv,lv))continue; // 本機未修改：保留雲端版本
+      if(!cloudEq(bv,rv) && !cloudEq(lv,rv))return null; // 同項目雙方都修改
+      if(lv===undefined)r.delete(id);else r.set(id,lv);
+    }
+    // 保留雲端既有順序，新增本機項目接在後面。
+    return [...r.values()];
+  }
+  function cloudThreeWay(key,base,local,remote){
+    if(cloudEq(local,base))return remote;
+    if(cloudEq(remote,base)||cloudEq(remote,local))return local;
+    if(key!=='userEvents')return cloudMergeList(base,local,remote,key);
+    const out={...remote};
+    for(const eventKey of new Set([...Object.keys(base),...Object.keys(local)])){
+      const merged=cloudMergeList(base[eventKey]||[],local[eventKey]||[],remote[eventKey]||[],'userEvents');
+      if(merged===null)return null;
+      if(merged.length)out[eventKey]=merged;else delete out[eventKey];
+    }
+    return out;
+  }
+  function cloudConflict(key,detail){
+    cloudBlocked.add(key);
+    cloudSetBadge(false);
+    cloudStatus('同步暫停：'+key+' '+detail+'。本機資料仍保留，請先匯出 JSON 備份。',true);
+  }
   async function cloudFlushKey(key){
     if(!cloudReady||!cloudRef||cloudWriting.has(key)||cloudBlocked.has(key))return;
-    cloudWriting.add(key);
-    cloudSetBadge(true);
+    cloudWriting.add(key);cloudSetBadge(true);
     try{
-      while(cloudReady){
-        const value=cloudClean(key,storeData[key]);
-        const expected=JSON.stringify(cloudPrevious[key]);
-        if(JSON.stringify(value)===expected)break;
-        // 先讀取一次真實雲端版本，避免交易第一次回呼拿到尚未載入的 null
-        // 就誤判衝突；交易本身仍再次比對，防止覆蓋其他裝置的變更。
-        const remoteSnap=await cloudRef.child(key).once('value');
-        const normalizeRemote=remote=>remote===null?(key==='userEvents'?{}:[]):(key==='userEvents'?remote:(Array.isArray(remote)?remote:Object.values(remote)));
-        if(JSON.stringify(cloudClean(key,normalizeRemote(remoteSnap.val())))!==expected){
-          cloudBlocked.add(key);
-          cloudStatus('同步衝突：'+key+' 的雲端版本與上次同步不同。本機資料已保留，請先備份。',true);
-          break;
-        }
-        let firstCallback=true;
-        const result=await cloudRef.child(key).transaction(remote=>{
-          // Firebase 首次交易可能只提供暫存 null；剛才已從伺服器讀取
-          // 並核對版本，後續伺服器若有新版本仍會重新執行回呼驗證。
-          if(firstCallback && remote===null && remoteSnap.exists()){
-            firstCallback=false;
-            return value.length===0 && key!=='userEvents'?null:value;
-          }
-          firstCallback=false;
-          if(JSON.stringify(cloudClean(key,normalizeRemote(remote)))!==expected)return;
-          return value.length===0 && key!=='userEvents'?null:value;
+      while(cloudReady&&!cloudBlocked.has(key)){
+        const base=cloudPrevious[key];
+        const local=cloudClean(key,storeData[key]);
+        if(cloudEq(base,local))break;
+        // 先讀伺服器快照，避免 Firebase transaction 第一次使用空快取而誤判。
+        const latest=cloudNormalize(key,(await cloudRef.child(key).once('value')).val());
+        const merged=cloudThreeWay(key,base,local,cloudClean(key,latest));
+        if(merged===null){cloudConflict(key,'另一裝置同時修改了相同項目');break;}
+        // Firebase transaction 可能重試；每次以最新 remote 重算合併，不以舊快照覆蓋。
+        let unsafe=false;
+        const result=await cloudRef.child(key).transaction(raw=>{
+          const remote=cloudClean(key,cloudNormalize(key,raw));
+          // 本機尚未收到資料庫快取時，不可假定空資料就是伺服器狀態。
+          if(raw===null && !cloudEq(latest,cloudNormalize(key,null)))return; 
+          const next=cloudThreeWay(key,base,local,remote);
+          if(next===null){unsafe=true;return;}
+          return key!=='userEvents' && next.length===0 ? null : next;
         },undefined,false);
         if(!result.committed){
-          cloudBlocked.add(key);
-          cloudSetBadge(false);
-          cloudStatus('同步衝突：'+key+' 的雲端版本已改變。本機修改已保留，請先備份，不要下載或合併。',true);
-          break;
+          // transaction 中止不代表資料被刪除；停止而不是無限重試。
+          cloudConflict(key,unsafe?'雲端同項目版本衝突':'交易未提交，請檢查網路或權限');break;
         }
-        cloudRememberVersion(key,cloudPrevious[key]);
-        cloudPrevious[key]=value;
-        cloudRememberVersion(key,value);
-        cloudSaveBaseline();
+        const committed=cloudClean(key,cloudNormalize(key,result.snapshot.val()));
+        cloudPrevious[key]=committed;
+        // 合併遠端新增項目，但不蓋掉寫入途中剛新增的本機項目。
+        const current=cloudClean(key,storeData[key]);
+        const reconciled=cloudThreeWay(key,local,current,committed);
+        if(reconciled===null){cloudConflict(key,'同步期間同一項目被修改');break;}
+        storeData[key]=cloudPreserveImages(key,reconciled);
+        localStorage.setItem(TRIP_KEY,JSON.stringify(storeData));
+        cloudSaveBaseline();cloudRefresh();
         cloudStatus('文字資料已同步 ✓');
       }
-    }catch(e){
-      cloudBlocked.add(key);
-      cloudSetBadge(false);
-      cloudStatus('雲端寫入失敗（本機已保留）：'+e.message+'。請先備份。',true);
-    }finally{
+    }catch(e){cloudConflict(key,'寫入失敗：'+e.message);}
+    finally{
       cloudWriting.delete(key);
-      // 寫入途中若有新操作，while 已讀取最新值；若最後一刻又變更，補送一次。
-      const rerun=cloudQueued.delete(key);
-      if(!cloudBlocked.has(key) && (rerun || cloudLocalDirty(key)))cloudFlushKey(key);
-      else cloudSaveBaseline();
+      cloudQueued.delete(key);
+      if(cloudReady&&!cloudBlocked.has(key)&&!cloudEq(cloudClean(key,storeData[key]),cloudPrevious[key])){
+        // 讓下一輪在前一輪完全結束後開始，確保同類別只有一個寫入者。
+        Promise.resolve().then(()=>cloudFlushKey(key));
+      }
       cloudSetBadge(cloudReady);
     }
   }
   window.cloudOnLocalSave=function(){
     if(!cloudReady||cloudApplying||!cloudRef)return;
     for(const key of cloudKeys){
-      if(JSON.stringify(cloudClean(key,storeData[key]))===JSON.stringify(cloudPrevious[key]))continue;
+      if(cloudEq(cloudClean(key,storeData[key]),cloudPrevious[key]))continue;
       if(cloudWriting.has(key)){cloudQueued.add(key);continue;}
       cloudFlushKey(key);
     }
