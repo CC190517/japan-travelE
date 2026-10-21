@@ -461,7 +461,7 @@
         localStorage.setItem(TRIP_KEY, value);
         if (localStorage.getItem(TRIP_KEY) !== value) throw new Error('寫入驗證失敗');
         badge.innerHTML = '<i class="fa-solid fa-check text-green-600"></i> 已儲存';
-        setTimeout(() => { if (badge.textContent.includes('已儲存')) badge.textContent = '本機儲存'; }, 1400);
+        setTimeout(() => { if (badge.textContent.includes('已儲存')) { if(window.cloudSetBadge)window.cloudSetBadge(!!window.cloudIsReady?.());else badge.textContent='本機儲存'; } }, 1400);
         if (window.cloudOnLocalSave) window.cloudOnLocalSave();
         return true;
       } catch (e) {
@@ -1048,6 +1048,20 @@
     appId: '1:123582566292:web:bcc135387964beee4d4981'
   };
   let cloudDb=null, cloudRef=null, cloudReady=false, cloudApplying=false, cloudPrevious=null;
+  // 自動恢復僅限本裝置曾成功啟用同步；不同步的本機修改不會被自動覆蓋。
+  const CLOUD_AUTO_KEY=TRIP_KEY+'_cloud_auto_v1';
+  const CLOUD_BASE_KEY=TRIP_KEY+'_cloud_last_synced_v1';
+  function cloudSaveBaseline(){
+    if(!cloudReady || !cloudPrevious)return;
+    try{localStorage.setItem(CLOUD_BASE_KEY,JSON.stringify(cloudPrevious));}
+    catch(e){cloudStatus('同步正常，但無法記錄安全檢查點：'+e.message,true);}
+  }
+  window.cloudIsReady=()=>cloudReady;
+  window.cloudSetBadge=cloudSetBadge;
+  function cloudSetBadge(active){
+    const badge=document.getElementById('save-status-badge');if(!badge)return;
+    badge.innerHTML=active?'<i class="fa-solid fa-cloud text-green-600"></i> 雲端同步':'<i class="fa-solid fa-mobile-screen text-themeGreen"></i> 本機儲存';
+  }
   const cloudKeys=['userEvents','accounting','packing','shopping','qrItems'];
   let cloudImagePrevious={}, cloudImageListening=false;
   function cloudStatus(msg, error=false){ const e=document.getElementById('cloud-status');if(e){e.textContent=msg;e.className='text-xs font-bold '+(error?'text-red-600':'text-themeGreen');} }
@@ -1069,7 +1083,7 @@
     return incoming;
   }
   function cloudRefresh(){switchDay(currentDay);renderAccounting();renderPacking();renderShopping();renderQrList();searchTrip();}
-  async function cloudConnect(){
+  async function cloudConnect(autoResume=false){
     try{
       cloudStatus('正在建立匿名身分…');
       if(!window.firebase)throw Error('Firebase 程式庫未載入，請確認網路連線');
@@ -1088,6 +1102,14 @@
         applyPrivateContent(privateSnap.val());
         privateRef.on('value',snap=>{try{if(snap.exists())applyPrivateContent(snap.val());else{setPrivateLock(false);cloudStatus('私人資料已移除',true);}}catch(e){setPrivateLock(false);cloudStatus('私人資料讀取失敗：'+e.message,true);}},e=>{setPrivateLock(false);cloudStatus('私人資料存取遭拒：'+e.message,true);});
         cloudStatus('私人行程已解鎖 ✓。若尚未同步記帳、行李及 QR，請按下方下載雲端資料。');
+        if(autoResume && localStorage.getItem(CLOUD_AUTO_KEY)==='1'){
+          const baseline=localStorage.getItem(CLOUD_BASE_KEY);
+          if(!baseline){cloudStatus('已連接，但找不到上次同步檢查點。請先備份並手動確認同步。',true);return;}
+          if(JSON.stringify(cloudSnapshot())!==baseline){
+            cloudStatus('偵測到本機有尚未確認的變更，已停止自動下載以保護資料。請先匯出 JSON 備份。',true);return;
+          }
+          await cloudStartDownload(true);
+        }
       }
     }catch(e){cloudStatus('連接失敗：'+e.message,true);}
   }
@@ -1168,11 +1190,14 @@
           cloudApplying=true;
           storeData[key]=cloudPreserveImages(key,normalized);
           cloudPrevious[key]=cloudClean(key,normalized);
-          try{localStorage.setItem(TRIP_KEY,JSON.stringify(storeData));cloudRefresh();cloudStatus('已接收雲端更新 ✓');}catch(e){cloudStatus('本機儲存失敗：'+e.message,true);}
+          try{localStorage.setItem(TRIP_KEY,JSON.stringify(storeData));cloudSaveBaseline();cloudRefresh();cloudStatus('已接收雲端更新 ✓');}catch(e){cloudStatus('本機儲存失敗：'+e.message,true);}
           cloudApplying=false;
         },e=>cloudStatus('同步讀取失敗：'+e.message,true));
       }
-      cloudStatus('即時同步已啟用 ✓（文字與小型圖片）');
+      cloudSaveBaseline();
+      try{localStorage.setItem(CLOUD_AUTO_KEY,'1');}catch(e){cloudStatus('同步已啟用，但無法保存自動恢復設定：'+e.message,true);return;}
+      cloudSetBadge(true);
+      cloudStatus('即時同步已啟用 ✓（重新開啟 App 將自動連線）');
     }catch(e){cloudApplying=false;cloudStatus('下載失敗：'+e.message,true);}
   }
   window.cloudOnLocalSave=function(){
@@ -1187,7 +1212,7 @@
         if(JSON.stringify(cloudClean(key,normalized))!==expected)return;
         return value;
       },undefined,false).then(result=>{
-        if(result.committed){cloudPrevious[key]=value;cloudStatus('文字資料已同步 ✓');}
+        if(result.committed){cloudPrevious[key]=value;cloudSaveBaseline();cloudStatus('文字資料已同步 ✓');}
         else cloudStatus('偵測到另一支手機同時修改 '+key+'，已停止覆蓋。請先匯出 JSON 備份，再重新整理確認。',true);
       }).catch(e=>cloudStatus('雲端寫入失敗（本機已儲存）：'+e.message,true));
     }
@@ -1280,6 +1305,13 @@
       }catch(e){cloudStatus('圖片首次上傳失敗：'+e.message,true);}
     }
   }
+  // 在兩個 script 都載入後啟動，避免 DOMContentLoaded 初始化資料前就下載雲端。
+  window.addEventListener('DOMContentLoaded',()=>{
+    if(localStorage.getItem(CLOUD_AUTO_KEY)==='1'){
+      cloudStatus('正在自動恢復雲端同步…');
+      cloudConnect(true);
+    }
+  });
   const cloudOriginalSave=window.cloudOnLocalSave;
   window.cloudOnLocalSave=function(){cloudOriginalSave();cloudSyncImages();};
 
