@@ -1156,7 +1156,7 @@
         if(autoResume && localStorage.getItem(CLOUD_AUTO_KEY)==='1'){
           const baseline=localStorage.getItem(CLOUD_BASE_KEY);
           if(!baseline){cloudStatus('已連接，但找不到上次同步檢查點。請先備份並手動確認同步。',true);return;}
-          if(JSON.stringify(cloudSnapshot())!==baseline){
+          if(!cloudEq(cloudSnapshot(),JSON.parse(baseline))){
             cloudStatus('偵測到本機有尚未確認的變更，已停止自動下載以保護資料。請先匯出 JSON 備份。',true);return;
           }
           await cloudStartDownload(true);
@@ -1237,10 +1237,10 @@
           const incoming=s.val();
           const normalized=key==='userEvents'?(incoming||{}):(incoming==null?[]:(Array.isArray(incoming)?incoming:Object.values(incoming)));
           const now=JSON.stringify(cloudClean(key,normalized));
-          if(now===JSON.stringify(cloudPrevious[key]))return;
+          if(cloudEq(cloudClean(key,normalized),cloudPrevious[key]))return;
           // 正在送出的本機修改不得被較舊的雲端事件蓋掉。
           if(cloudWriting.has(key))return;
-          if(JSON.stringify(cloudClean(key,storeData[key]))!==JSON.stringify(cloudPrevious[key])){
+          if(!cloudEq(cloudClean(key,storeData[key]),cloudPrevious[key])){
             // 連續新增時，本機尚未送完屬正常情況；由佇列三方合併處理。
             cloudScheduleFlush(key,200);
             return;
@@ -1337,72 +1337,65 @@
   }
   function cloudConflict(key,detail){cloudDiagnostic(key,detail,true);}
   function cloudWait(ms){return new Promise(resolve=>setTimeout(resolve,ms));}
+  // v5: single-flight per category. One confirmed transaction per queued change.
+  // Never mark cloud data confirmed until the server acknowledges the transaction.
   async function cloudFlushKey(key){
     if(!cloudReady||!cloudRef||cloudWriting.has(key)||cloudBlocked.has(key))return;
     clearTimeout(cloudDebounceTimers.get(key));
     cloudDebounceTimers.delete(key);
-    cloudWriting.add(key);cloudSetBadge(true);
-    let retry=0, rounds=0;
+    cloudWriting.add(key);
+    cloudSetBadge(true);
     try{
-      while(cloudReady&&!cloudBlocked.has(key)){
-        if(++rounds>8){
-          cloudDiagnostic(key,'連續同步超過 8 輪，已停止重試以避免無限循環；本機資料保留',true);
-          break;
-        }
-        // 必須在每一輪開始時重新取得本機資料，不能使用上一筆的舊快照。
-        const base=cloudClean(key,cloudPrevious[key]);
-        const local=cloudClean(key,storeData[key]);
-        if(cloudEq(base,local))break;
-        try{
-          const ref=cloudRef.child(key);
-          const server=cloudClean(key,cloudNormalize(key,(await ref.once('value')).val()));
-          if(cloudThreeWay(key,base,local,server)===null){
-            cloudConflict(key,'另一裝置修改了相同項目，已保留本機內容');break;
-          }
-          let conflict=false;
-          // transaction updater 可能被呼叫多次，不能在回呼內改寫本機資料。
-          const result=await ref.transaction(raw=>{
-            const remote=cloudClean(key,cloudNormalize(key,raw));
-            // Firebase 第一次可能以 null 快取呼叫 updater；用剛取得的
-            // server snapshot 作初始候選，伺服器版本不同會重新執行 updater。
-            const candidate=(raw===null&&!cloudEq(server,cloudClean(key,cloudNormalize(key,null))))?server:remote;
-            const merged=cloudThreeWay(key,base,local,candidate);
-            if(merged===null){conflict=true;return;}
-            return key!=='userEvents'&&merged.length===0?null:merged;
-          },undefined,false);
-          if(!result.committed){
-            if(conflict){cloudConflict(key,'雲端同一項目有不同修改，未覆蓋任何一方');break;}
-            throw Error('Firebase 交易未提交');
-          }
-          const committed=cloudClean(key,cloudNormalize(key,result.snapshot.val()));
-          // 先確認本機在網路等待期間又做了哪些變更，再更新基準。
-          const newest=cloudClean(key,storeData[key]);
-          const next=cloudThreeWay(key,local,newest,committed);
-          cloudPrevious[key]=committed;
-          cloudSaveBaseline();
-          if(next===null){
-            // 已成功送出舊版本，但本機有同一項目的新編輯；不要丟掉新編輯。
-            // 保留本機資料並繼續以新基準重試。
-            cloudStatus('已送出前一筆，正在同步後續編輯…');
-          }else{
-            storeData[key]=cloudPreserveImages(key,next);
-            localStorage.setItem(TRIP_KEY,JSON.stringify(storeData));
-            cloudRefresh();
-          }
-          retry=0;cloudFaults.delete(key);
-          cloudStatus('文字資料已同步 ✓');
-        }catch(e){
-          retry++;
-          const detail=e&&e.message?e.message:String(e);
-          if(retry>=6){cloudDiagnostic(key,'多次寫入失敗（'+detail+'），本機資料保留；請檢查連線及 Firebase 權限',true);break;}
-          cloudDiagnostic(key,'第 '+retry+' 次重試（'+detail+'）');
-          await cloudWait(Math.min(12000,600*Math.pow(2,retry-1)));
-        }
+      const base=cloudClean(key,cloudPrevious[key]);
+      const local=cloudClean(key,storeData[key]);
+      if(cloudEq(base,local))return;
+      const ref=cloudRef.child(key);
+      // Explicit read is used only for the initial transaction's null cache value.
+      const server=cloudClean(key,cloudNormalize(key,(await ref.once('value')).val()));
+      let mergeError=false;
+      let sawRealValue=false;
+      const result=await ref.transaction(raw=>{
+        const empty=cloudClean(key,cloudNormalize(key,null));
+        // RTDB compat can call updater first with an empty local cache. It will
+        // re-run against server data if the server value differs.
+        const candidate=(raw===null&&!sawRealValue&&!cloudEq(server,empty))
+          ? server : cloudClean(key,cloudNormalize(key,raw));
+        if(raw!==null)sawRealValue=true;
+        const next=cloudThreeWay(key,base,local,candidate);
+        if(next===null){mergeError=true;return;}
+        return key!=='userEvents'&&Array.isArray(next)&&next.length===0?null:next;
+      },undefined,false);
+      if(!result.committed){
+        cloudConflict(key,mergeError?'同一項目在兩台裝置被修改；本機資料保留':'Firebase 未確認交易；本機資料保留');
+        return;
       }
+      const confirmed=cloudClean(key,cloudNormalize(key,result.snapshot.val()));
+      // Reconcile edits made while the network request was in flight.
+      const current=cloudClean(key,storeData[key]);
+      const reconciled=cloudThreeWay(key,local,current,confirmed);
+      cloudPrevious[key]=confirmed;
+      if(reconciled===null){
+        // Do not overwrite the edits made during upload.
+        cloudSaveBaseline();
+        cloudConflict(key,'上傳期間同一項目有新修改；本機資料保留');
+        return;
+      }
+      storeData[key]=cloudPreserveImages(key,reconciled);
+      localStorage.setItem(TRIP_KEY,JSON.stringify(storeData));
+      cloudSaveBaseline();
+      cloudFaults.delete(key);
+      cloudRefresh();
+      cloudStatus('伺服器已確認文字資料 ✓');
+    }catch(e){
+      cloudConflict(key,'上傳未完成：'+(e?.message||String(e))+'；本機資料保留');
     }finally{
-      cloudWriting.delete(key);cloudQueued.delete(key);
-      if(cloudReady&&!cloudBlocked.has(key)&&!cloudEq(cloudClean(key,storeData[key]),cloudPrevious[key])){
-        cloudScheduleFlush(key,180);
+      cloudWriting.delete(key);
+      cloudQueued.delete(key);
+      // Only one follow-up is scheduled, after the previous transaction has
+      // completed. This prevents recursive microtask flush loops.
+      if(cloudReady&&!cloudBlocked.has(key)&&
+         !cloudEq(cloudClean(key,storeData[key]),cloudPrevious[key])){
+        cloudScheduleFlush(key,700);
       }
       cloudSetBadge(cloudReady);
     }
