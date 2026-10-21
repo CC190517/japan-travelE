@@ -1099,6 +1099,7 @@
     const badge=document.getElementById('save-status-badge');if(!badge)return;
     const healthy=active && cloudBlocked.size===0;
     const pending=healthy && (cloudWriting.size>0 || cloudQueued.size>0 || (cloudPrevious && cloudKeys.some(k=>!cloudEq(cloudClean(k,storeData[k]),cloudPrevious[k]))));
+    badge.title=cloudBlocked.size?'同步暫停：'+[...cloudBlocked].map(k=>cloudFaults.get(k)||k).join('；'):'';
     badge.innerHTML=healthy?(pending?'<i class="fa-solid fa-cloud-arrow-up text-amber-600"></i> 同步中':'<i class="fa-solid fa-cloud text-green-600"></i> 雲端同步'):'<i class="fa-solid fa-mobile-screen text-themeGreen"></i> 本機儲存';
   }
   const cloudKeys=['userEvents','accounting','packing','shopping','qrItems'];
@@ -1280,68 +1281,81 @@
     }
     return out;
   }
-  function cloudConflict(key,detail){
-    cloudBlocked.add(key);
-    cloudSetBadge(false);
-    cloudStatus('同步暫停：'+key+' '+detail+'。本機資料仍保留，請先匯出 JSON 備份。',true);
+  // v4：每個類別單一寫入者，使用伺服器確認後的快照作為下一輪基準。
+  // 本機連續修改永遠留在 storeData，寫入中的快照不會覆蓋後續新增。
+  const cloudFaults=new Map();
+  function cloudDiagnostic(key,detail,stop=false){
+    const message=key+'：'+detail;
+    cloudFaults.set(key,message);
+    console.warn('[日本旅遊同步]',message);
+    cloudStatus((stop?'同步已暫停：':'同步將自動重試：')+message,true);
+    if(stop)cloudBlocked.add(key);
+    cloudSetBadge(cloudReady);
   }
+  function cloudConflict(key,detail){cloudDiagnostic(key,detail,true);}
+  function cloudWait(ms){return new Promise(resolve=>setTimeout(resolve,ms));}
   async function cloudFlushKey(key){
     if(!cloudReady||!cloudRef||cloudWriting.has(key)||cloudBlocked.has(key))return;
+    clearTimeout(cloudDebounceTimers.get(key));
+    cloudDebounceTimers.delete(key);
     cloudWriting.add(key);cloudSetBadge(true);
+    let retry=0;
     try{
       while(cloudReady&&!cloudBlocked.has(key)){
-        const base=cloudPrevious[key];
+        // 必須在每一輪開始時重新取得本機資料，不能使用上一筆的舊快照。
+        const base=cloudClean(key,cloudPrevious[key]);
         const local=cloudClean(key,storeData[key]);
         if(cloudEq(base,local))break;
-        // 先讀伺服器快照，避免 Firebase transaction 第一次使用空快取而誤判。
-        const latest=cloudNormalize(key,(await cloudRef.child(key).once('value')).val());
-        const merged=cloudThreeWay(key,base,local,cloudClean(key,latest));
-        if(merged===null){cloudConflict(key,'另一裝置同時修改了相同項目');break;}
-        // Firebase transaction 可能重試；每次以最新 remote 重算合併，不以舊快照覆蓋。
-        let unsafe=false;
-        const result=await cloudRef.child(key).transaction(raw=>{
-          unsafe=false;
-          const remote=cloudClean(key,cloudNormalize(key,raw));
-          // Firebase transaction 首次回呼可能取得 null（本機快取尚未建立），
-          // 即使先前 once('value') 已取得非空伺服器資料。不能在這裡 return undefined，
-          // 否則 transaction 會被視為未提交，並把整個清單永久標為衝突。
-          // 首次空快取先使用已讀取的伺服器快照；若伺服器版本變更，Firebase
-          // 會重新呼叫 transaction updater，再用新的 raw 做三方合併。
-          const effectiveRemote=(raw===null && !cloudEq(latest,cloudNormalize(key,null)))
-            ? cloudClean(key,latest) : remote;
-          const next=cloudThreeWay(key,base,local,effectiveRemote);
-          if(next===null){unsafe=true;return;}
-          return key!=='userEvents' && next.length===0 ? null : next;
-        },undefined,false);
-        if(!result.committed){
-          if(unsafe){cloudConflict(key,'雲端同項目版本衝突');break;}
-          // 暫時性的 Firebase transaction 中止不應將整個裝置永久切回本機。
-          const attempts=(cloudRetryCounts.get(key)||0)+1;
-          cloudRetryCounts.set(key,attempts);
-          if(attempts>5){cloudConflict(key,'連續交易未提交，請檢查網路或權限');break;}
-          cloudStatus('雲端交易重試中（'+attempts+'/5）…');
-          await new Promise(resolve=>setTimeout(resolve,300*attempts));
-          continue;
+        try{
+          const ref=cloudRef.child(key);
+          const server=cloudClean(key,cloudNormalize(key,(await ref.once('value')).val()));
+          if(cloudThreeWay(key,base,local,server)===null){
+            cloudConflict(key,'另一裝置修改了相同項目，已保留本機內容');break;
+          }
+          let conflict=false;
+          // transaction updater 可能被呼叫多次，不能在回呼內改寫本機資料。
+          const result=await ref.transaction(raw=>{
+            const remote=cloudClean(key,cloudNormalize(key,raw));
+            // Firebase 第一次可能以 null 快取呼叫 updater；用剛取得的
+            // server snapshot 作初始候選，伺服器版本不同會重新執行 updater。
+            const candidate=(raw===null&&!cloudEq(server,cloudNormalize(key,null)))?server:remote;
+            const merged=cloudThreeWay(key,base,local,candidate);
+            if(merged===null){conflict=true;return;}
+            return key!=='userEvents'&&merged.length===0?null:merged;
+          },undefined,false);
+          if(!result.committed){
+            if(conflict){cloudConflict(key,'雲端同一項目有不同修改，未覆蓋任何一方');break;}
+            throw Error('Firebase 交易未提交');
+          }
+          const committed=cloudClean(key,cloudNormalize(key,result.snapshot.val()));
+          // 先確認本機在網路等待期間又做了哪些變更，再更新基準。
+          const newest=cloudClean(key,storeData[key]);
+          const next=cloudThreeWay(key,local,newest,committed);
+          cloudPrevious[key]=committed;
+          cloudSaveBaseline();
+          if(next===null){
+            // 已成功送出舊版本，但本機有同一項目的新編輯；不要丟掉新編輯。
+            // 保留本機資料並繼續以新基準重試。
+            cloudStatus('已送出前一筆，正在同步後續編輯…');
+          }else{
+            storeData[key]=cloudPreserveImages(key,next);
+            localStorage.setItem(TRIP_KEY,JSON.stringify(storeData));
+            cloudRefresh();
+          }
+          retry=0;cloudFaults.delete(key);
+          cloudStatus('文字資料已同步 ✓');
+        }catch(e){
+          retry++;
+          const detail=e&&e.message?e.message:String(e);
+          if(retry>=6){cloudDiagnostic(key,'多次寫入失敗（'+detail+'），本機資料保留；請檢查連線及 Firebase 權限',true);break;}
+          cloudDiagnostic(key,'第 '+retry+' 次重試（'+detail+'）');
+          await cloudWait(Math.min(12000,600*Math.pow(2,retry-1)));
         }
-        cloudRetryCounts.delete(key);
-        const committed=cloudClean(key,cloudNormalize(key,result.snapshot.val()));
-        cloudPrevious[key]=committed;
-        // 合併遠端新增項目，但不蓋掉寫入途中剛新增的本機項目。
-        const current=cloudClean(key,storeData[key]);
-        const reconciled=cloudThreeWay(key,local,current,committed);
-        if(reconciled===null){cloudConflict(key,'同步期間同一項目被修改');break;}
-        storeData[key]=cloudPreserveImages(key,reconciled);
-        localStorage.setItem(TRIP_KEY,JSON.stringify(storeData));
-        cloudSaveBaseline();cloudRefresh();
-        cloudStatus('文字資料已同步 ✓');
       }
-    }catch(e){cloudConflict(key,'寫入失敗：'+e.message);}
-    finally{
-      cloudWriting.delete(key);
-      cloudQueued.delete(key);
+    }finally{
+      cloudWriting.delete(key);cloudQueued.delete(key);
       if(cloudReady&&!cloudBlocked.has(key)&&!cloudEq(cloudClean(key,storeData[key]),cloudPrevious[key])){
-        // 讓下一輪在前一輪完全結束後開始，確保同類別只有一個寫入者。
-        cloudScheduleFlush(key,250);
+        cloudScheduleFlush(key,180);
       }
       cloudSetBadge(cloudReady);
     }
@@ -1351,7 +1365,7 @@
     for(const key of cloudKeys){
       if(cloudEq(cloudClean(key,storeData[key]),cloudPrevious[key]))continue;
       if(cloudWriting.has(key)){cloudQueued.add(key);continue;}
-      cloudScheduleFlush(key);
+      cloudScheduleFlush(key,450);
     }
   };
 
